@@ -4,6 +4,7 @@ import {
   STRATEGY_FIELD_HELP,
   type StrategyProfile,
 } from '@optionscout/shared';
+import { SuccessToast } from '../brand/SuccessToast';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -86,6 +87,7 @@ export function StrategyBuilderPage() {
         </Typography>
       </Box>
 
+      <SuccessToast message={notice} />
       {notice ? <Alert severity="info">{notice}</Alert> : null}
 
       <Paper sx={{ p: 2.5 }}>

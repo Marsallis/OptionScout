@@ -6,7 +6,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useTheme } from '@mui/material/styles';
+import { AppMark } from '../brand/AppMark';
 
 export type ScanUiStage =
   | 'idle'
@@ -58,70 +58,6 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function RadarGraphic({ active, reducedMotion }: { active: boolean; reducedMotion: boolean }) {
-  const theme = useTheme();
-  const accent = theme.palette.primary.main;
-  const animate = active && !reducedMotion;
-  return (
-    <Box
-      sx={{
-        width: 88,
-        height: 88,
-        position: 'relative',
-        flexShrink: 0,
-        '@keyframes scoutPulse': {
-          '0%': { transform: 'scale(0.85)', opacity: 0.35 },
-          '70%': { transform: 'scale(1.15)', opacity: 0 },
-          '100%': { transform: 'scale(1.15)', opacity: 0 },
-        },
-        '@keyframes scoutSpin': {
-          to: { transform: 'rotate(360deg)' },
-        },
-      }}
-      aria-hidden
-    >
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          border: `2px solid ${accent}`,
-          opacity: 0.35,
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 12,
-          borderRadius: '50%',
-          border: `2px solid ${accent}`,
-          opacity: 0.55,
-          animation: animate ? 'scoutPulse 1.8s ease-out infinite' : 'none',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          background: `conic-gradient(from 0deg, transparent 0deg, ${accent} 70deg, transparent 110deg)`,
-          opacity: animate ? 0.55 : 0.2,
-          animation: animate ? 'scoutSpin 2.4s linear infinite' : 'none',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: '38%',
-          borderRadius: '50%',
-          bgcolor: accent,
-          opacity: 0.9,
-        }}
-      />
-    </Box>
-  );
-}
-
 /** True while contracts are still being retrieved or the client is chaining the next batch. */
 export function scanProgressIsOpen(status: SmartScanResult['status'] | undefined, stillWorking: boolean): boolean {
   return stillWorking || status === 'running';
@@ -164,7 +100,7 @@ export function SmartScanProgressPanel({
   return (
     <Paper sx={{ p: { xs: 2, md: 3 } }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-        <RadarGraphic active={running} reducedMotion={reducedMotion} />
+        <AppMark size={72} researching={running && !reducedMotion} title={running ? 'Research in progress' : 'OptionScout'} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h6">Research so far</Typography>
           <Typography variant="body1" sx={{ fontWeight: 650, mt: 0.5 }}>

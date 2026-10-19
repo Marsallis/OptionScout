@@ -112,6 +112,8 @@ export function CandidateResultCard({
 
   return (
     <Paper
+      className="os-result-card"
+      data-selected={selected ? 'true' : 'false'}
       variant="outlined"
       sx={{
         p: 2,
@@ -127,7 +129,7 @@ export function CandidateResultCard({
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
                 {companyName ? `${candidate.underlying} · ${companyName}` : candidate.underlying}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'var(--os-font-mono)' }}>
                 {title}
               </Typography>
             </Box>

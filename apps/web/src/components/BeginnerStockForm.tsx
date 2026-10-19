@@ -208,7 +208,15 @@ export function BeginnerStockForm({
           </Typography>
           <Box sx={{ maxHeight: 320, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
             {visible.map((row) => (
-              <Stack key={row.ticker} component="label" direction="row" spacing={0.5} sx={{ alignItems: 'center', px: 0.5 }}>
+              <Stack
+                key={row.ticker}
+                className="os-stock-row"
+                data-selected={selectedTickers.includes(row.ticker) ? 'true' : 'false'}
+                component="label"
+                direction="row"
+                spacing={0.5}
+                sx={{ alignItems: 'center', px: 0.5 }}
+              >
                 <Checkbox
                   size="small"
                   checked={selectedTickers.includes(row.ticker)}
@@ -216,7 +224,7 @@ export function BeginnerStockForm({
                   onChange={(_event, checked) => toggle(row.ticker, checked)}
                   inputProps={{ 'aria-label': `${row.ticker} ${row.name}` }}
                 />
-                <Typography variant="body2" sx={{ width: 64, fontWeight: 650 }}>
+                <Typography variant="body2" sx={{ width: 72, fontWeight: 650, fontFamily: 'var(--os-font-mono)' }}>
                   {row.ticker}
                 </Typography>
                 <Typography variant="body2" sx={{ flex: 1 }} noWrap>

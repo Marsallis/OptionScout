@@ -54,6 +54,7 @@ import { DiscoverOnboarding } from '../components/DiscoverOnboarding';
 import { DiscoverSetupPanels } from '../components/DiscoverSetupPanels';
 import { StockCollectionsDialog } from '../components/StockCollectionsDialog';
 import { DiscoverResultsSection } from '../components/DiscoverResultsSection';
+import { SuccessToast } from '../brand/SuccessToast';
 import { SmartScanProgressPanel } from '../components/SmartScanProgressPanel';
 import { RecentSearchesPanel } from '../components/RecentSearchesPanel';
 import { useAppState } from '../state/AppState';
@@ -670,6 +671,7 @@ export function DiscoverOpportunitiesPage() {
         </Alert>
       ) : null}
 
+      <SuccessToast message={notice} />
       {notice && notice !== research.discover.pendingSearch?.notice ? (
         <Alert severity={scan?.status === 'failed' || scanBlocked ? 'error' : 'info'}>{notice}</Alert>
       ) : null}

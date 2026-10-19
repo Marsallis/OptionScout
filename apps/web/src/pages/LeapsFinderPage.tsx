@@ -77,6 +77,7 @@ import {
   saveFinderBookmark,
   scanFinderMore,
 } from '../api/client';
+import { SuccessToast } from '../brand/SuccessToast';
 import { CandidateResultCard } from '../components/CandidateResultCard';
 import { CompareTray } from '../components/CompareTray';
 import { ContractComparisonPanel } from '../components/ContractComparisonPanel';
@@ -615,6 +616,7 @@ export function LeapsFinderPage() {
           </Typography>
         </Alert>
       ) : null}
+      <SuccessToast message={notice} />
       {notice ? (
         <Alert severity={scan?.status === 'failed' ? 'error' : 'info'}>
           {notice}

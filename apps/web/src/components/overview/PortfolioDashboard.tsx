@@ -66,7 +66,7 @@ function SnapshotTile({ card }: { card: SnapshotCard }) {
       <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 650 }}>
         {card.label}
       </Typography>
-      <Typography sx={{ fontSize: cardValueSize, fontWeight: 750, lineHeight: 1.2, mt: 1, color, fontVariantNumeric: 'tabular-nums' }}>
+      <Typography sx={{ fontFamily: 'var(--os-font-heading)', fontSize: cardValueSize, fontWeight: 750, lineHeight: 1.2, mt: 1, color, fontVariantNumeric: 'tabular-nums' }}>
         {card.value}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
