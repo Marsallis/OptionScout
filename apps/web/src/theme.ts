@@ -40,37 +40,7 @@ export const theme = createTheme({
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        '@font-face': [
-          {
-            fontFamily: 'Inter',
-            fontStyle: 'normal',
-            fontWeight: '100 900',
-            fontDisplay: 'swap',
-            src: 'url(/fonts/inter-latin.woff2) format("woff2")',
-          },
-          {
-            fontFamily: 'Space Grotesk',
-            fontStyle: 'normal',
-            fontWeight: '100 900',
-            fontDisplay: 'swap',
-            src: 'url(/fonts/space-grotesk-latin.woff2) format("woff2")',
-          },
-          {
-            fontFamily: 'IBM Plex Mono',
-            fontStyle: 'normal',
-            fontWeight: 500,
-            fontDisplay: 'swap',
-            src: 'url(/fonts/ibm-plex-mono-500.woff2) format("woff2")',
-          },
-          {
-            fontFamily: 'IBM Plex Mono',
-            fontStyle: 'normal',
-            fontWeight: 600,
-            fontDisplay: 'swap',
-            src: 'url(/fonts/ibm-plex-mono-600.woff2) format("woff2")',
-          },
-        ],
-        ':root': {
+        body: {
           '--os-font-heading': font.heading,
           '--os-font-body': font.body,
           '--os-font-mono': font.mono,
@@ -78,8 +48,6 @@ export const theme = createTheme({
           '--os-positive': color.positive,
           '--os-warning': color.warning,
           '--os-negative': color.negative,
-        },
-        body: {
           backgroundColor: color.background,
           backgroundImage: 'radial-gradient(900px 420px at 0% -10%, rgba(18, 217, 175, 0.10), transparent 55%)',
           fontVariantNumeric: 'tabular-nums',
