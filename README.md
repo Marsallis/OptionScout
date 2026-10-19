@@ -18,7 +18,7 @@ You can learn the workflow with a built-in simulated book. Connecting a brokerag
 
 **Use a large directory when you have the file.** S&P 500, total-market, and Nasdaq-100 collections explain where to download a fund's own holdings file. OptionScout does not download or redistribute those files. An empty category stays empty until you import one.
 
-**Save an investing strategy.** The built-in starting point is Sal PMCC — Deep ITM. You can revise the rules. Older revisions stay stored.
+**Save an investing strategy.** The built-in example is Sal PMCC — Deep ITM, revision 1. It shows how rules are stored. It is not a recommended investment strategy, and it is not a later private revision of a personal profile. You can copy it and change the numbers. Revisions you save stay in your local database.
 
 **Read the result groups.** Best Matches have passed every configured hard rule and preference that could be assessed. Near Matches passed the hard rules and missed a preference. Contracts with a missing or invalid quote are not presented as matches. A bid/ask spread of 5% or wider is a display warning. It does not change the match decision.
 
@@ -126,7 +126,7 @@ If you are not using Docker, the same command is `npm run owner-setup` after `np
 3. Read the Overview. The sample positions are NVDA, AMZN, AAPL, and MSFT. The banner says DEMO MODE.
 4. Sign in. Open Find One Stock and research the fictional ticker `DEMO`. The page labels the chain as simulated.
 5. Open Explore Stocks, choose a curated example, and run Find Matching LEAPS. Those prices are simulated fixtures, not live quotes.
-6. Open My Investing Rules to see the saved strategy.
+6. Open My Investing Rules to see the example strategy, Sal PMCC — Deep ITM revision 1. That screen is the built-in template. It is not a recommendation and it is not a private later revision.
 
 Simulated rows never enter the brokerage position tables. Switching Settings to the brokerage portfolio does not delete the demo book. It only changes which book the screen reads.
 
@@ -148,7 +148,7 @@ SMART_SCAN_LIVE=true
 5. Recreate the container: `docker compose up -d --force-recreate`. Startup still does not scan or import until you ask.
 6. Sign in, open Settings, choose the brokerage portfolio, and turn on on-demand search. Then use Broker & Data when you want to import. Start a search only when you want market data.
 
-The steps above were checked against the local configuration parser and a blank secret file. A live token exchange with tastytrade was not run. Use your own application and your own refresh token. OptionScout never needs someone else's credentials or database.
+Demo onboarding has been tested on an isolated install: blank secrets, a local passphrase, the simulated book, and a simulated `DEMO` search. Real personal tastytrade OAuth onboarding has not been independently tested end to end. The steps above were checked against the local configuration parser and a blank secret file. A live token exchange was not run. Use your own application and your own refresh token. OptionScout never needs someone else's credentials or database.
 
 To disconnect, set those three values back to `false`, clear `secrets/tastytrade.env`, and recreate the container. Also revoke the OAuth application or refresh token in tastytrade. OptionScout does not keep the access token on disk. Revoking the refresh token at the provider stops new access even if a local copy remains.
 

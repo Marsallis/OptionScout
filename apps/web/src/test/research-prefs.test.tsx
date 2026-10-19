@@ -5,7 +5,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CssBaseline, ThemeProvider } from '@mui/material';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, Link } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ACCEPTANCE_SAVED_PROFILE,
@@ -17,7 +17,7 @@ import {
   type SessionView,
 } from '@optionscout/shared';
 import { buildDiscoverUxPreviewScan } from '../discoverUxPreview';
-import { DiscoverOpportunitiesPage } from '../pages/DiscoverOpportunitiesPage';
+import { DiscoverOpportunitiesPage, resetDiscoverSelectionDraft } from '../pages/DiscoverOpportunitiesPage';
 import { ResearchWorkspaceProvider } from '../state/ResearchWorkspace';
 import { theme } from '../theme';
 import { brokerFixture, settingsFixture } from './fixtures';
@@ -141,6 +141,7 @@ function patchesFor(id: string): ResearchUiPrefs[] {
 
 describe('Acceptance 12 — Discover preferences survive navigation and refresh', () => {
   beforeEach(() => {
+    resetDiscoverSelectionDraft();
     mocks.server.clear();
     mocks.appState.session = {
       authenticated: true,
@@ -275,5 +276,93 @@ describe('Acceptance 12 — Discover preferences survive navigation and refresh'
     expect(await screen.findByRole('button', { name: /^BRK\.B/ })).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox', { name: new RegExp(small.tickers[0]!) }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/BAD\$/)).not.toBeInTheDocument();
+  }, 20_000);
+
+  it('keeps checked companies when navigating away from Explore Stocks and back', async () => {
+    const user = userEvent.setup();
+    mocks.fetchLatestResearchSession.mockRejectedValue(new Error('No saved research session yet.'));
+    const [starter] = listCuratedStarterUniverses();
+    const small = { ...starter!, tickers: starter!.tickers.slice(0, 3) };
+    mocks.fetchDiscoveryUniverses.mockResolvedValue({ curated: [small], saved: [], bookmarkDerived: null });
+    const ticker = small.tickers[0]!;
+
+    render(
+      <MemoryRouter initialEntries={['/discover']}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <ResearchWorkspaceProvider>
+            <Routes>
+              <Route path="/discover" element={<DiscoverOpportunitiesPage />} />
+              <Route
+                path="/leaps"
+                element={
+                  <div>
+                    Finder page
+                    <Link to="/discover">Back to Explore</Link>
+                  </div>
+                }
+              />
+            </Routes>
+          </ResearchWorkspaceProvider>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    const checkbox = await screen.findByRole('checkbox', { name: new RegExp(ticker) });
+    await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText(/Selected 1\/20/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Find One Stock' }));
+    expect(await screen.findByText('Finder page')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: new RegExp(ticker) })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Explore' }));
+    const restored = await screen.findByRole('checkbox', { name: new RegExp(ticker) });
+    expect(restored).toBeChecked();
+    expect(screen.getByText(/Selected 1\/20/)).toBeInTheDocument();
+    expect(mocks.createSmartScan).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('keeps an added ticker when the company list has not loaded', async () => {
+    const user = userEvent.setup();
+    mocks.fetchLatestResearchSession.mockRejectedValue(new Error('No saved research session yet.'));
+    mocks.fetchDiscoveryUniverses.mockRejectedValue(new Error('Sign in required'));
+
+    render(
+      <MemoryRouter initialEntries={['/discover']}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <ResearchWorkspaceProvider>
+            <Routes>
+              <Route path="/discover" element={<DiscoverOpportunitiesPage />} />
+              <Route
+                path="/leaps"
+                element={
+                  <div>
+                    Finder page
+                    <Link to="/discover">Back to Explore</Link>
+                  </div>
+                }
+              />
+            </Routes>
+          </ResearchWorkspaceProvider>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    const addTicker = await screen.findByLabelText('Add ticker');
+    await user.type(addTicker, 'aapl');
+    await user.click(screen.getByRole('button', { name: 'Add Ticker' }));
+    expect(await screen.findByRole('button', { name: /^AAPL/ })).toBeInTheDocument();
+    expect(screen.getByText(/Selected 1\/20/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Find One Stock' }));
+    expect(await screen.findByText('Finder page')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Explore' }));
+    expect(await screen.findByRole('button', { name: /^AAPL/ })).toBeInTheDocument();
+    expect(screen.getByText(/Selected 1\/20/)).toBeInTheDocument();
+    expect(mocks.createSmartScan).not.toHaveBeenCalled();
   }, 20_000);
 });

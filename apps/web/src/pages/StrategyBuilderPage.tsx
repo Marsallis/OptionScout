@@ -85,6 +85,11 @@ export function StrategyBuilderPage() {
           on the LEAPS Finder and never silently rewrite a saved strategy. Each save creates a new revision so older scans
           and bookmarks keep their historical settings.
         </Typography>
+        {draft.kind === 'builtin-template' ? (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {draft.referenceNote}
+          </Typography>
+        ) : null}
       </Box>
 
       <SuccessToast message={notice} />

@@ -145,6 +145,7 @@ export function BeginnerStockForm({
           Max cost ${Number(profile.hard.maxContractCost).toLocaleString('en-US')} · min delta {profile.hard.minLongDelta} · min{' '}
           {profile.hard.minExpirationDays} days · preferred delta {profile.preferences.preferredLongDelta} · intrinsic{' '}
           {profile.preferences.minIntrinsicPercent}%
+          {profile.kind === 'builtin-template' ? ' · example strategy, not a recommendation' : ''}
         </Typography>
       ) : null}
 

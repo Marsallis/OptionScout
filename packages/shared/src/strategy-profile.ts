@@ -189,7 +189,7 @@ export const SAL_PMCC_DEEP_ITM: StrategyProfile = {
   isDefault: true,
   authority: 'implementation-spec',
   referenceNote:
-    'These defaults are the current implementation specification. The Sal Talks Life PMCC Playbook and LEAPS Checklist PDFs are not stored here and have not been parsed. Reset restores this built-in template without deleting custom copies.',
+    'Example strategy, revision 1. It shows how rules are stored. It is not a recommended investment strategy and it is not a later private revision of a personal profile. Reset restores this built-in template without deleting custom copies.',
   references: [],
   hard: {
     maxContractCost: '7000.00',

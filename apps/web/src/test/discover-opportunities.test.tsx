@@ -11,7 +11,7 @@ import {
   type SessionView,
   type SettingsView,
 } from '@optionscout/shared';
-import { DiscoverOpportunitiesPage } from '../pages/DiscoverOpportunitiesPage';
+import { DiscoverOpportunitiesPage, resetDiscoverSelectionDraft } from '../pages/DiscoverOpportunitiesPage';
 import { ResearchWorkspaceProvider } from '../state/ResearchWorkspace';
 import { theme } from '../theme';
 import { brokerFixture, settingsFixture } from './fixtures';
@@ -86,6 +86,7 @@ function renderPage() {
 
 describe('Discover Opportunities page', () => {
   beforeEach(() => {
+    resetDiscoverSelectionDraft();
     cleanup();
     mocks.appState.status = 'ready';
     mocks.appState.error = null;

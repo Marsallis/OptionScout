@@ -655,7 +655,11 @@ export function LeapsFinderPage() {
             label="Selected strategy"
             value={profileId}
             onChange={(event) => setProfileId(event.target.value)}
-            helperText={`${activeProfile.name} · revision ${activeProfile.revision}`}
+            helperText={
+              activeProfile.kind === 'builtin-template'
+                ? `${activeProfile.name} · revision ${activeProfile.revision} · example strategy, not a recommendation`
+                : `${activeProfile.name} · revision ${activeProfile.revision}`
+            }
             sx={{ minWidth: 260 }}
           >
             {profiles.map((row) => (

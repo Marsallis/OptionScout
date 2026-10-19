@@ -74,31 +74,60 @@ function resolveScanTickers(manualTickers: string, selectedTickers: string[], ma
 
 const DISCOVER_DRAFT_KEY = 'optionscout.discoverDraft';
 
-type DiscoverDraft = { universeId: string; selectedTickers: string[]; manualTickers: string };
+type DiscoverDraft = {
+  universeId: string;
+  directoryId: string;
+  selectedTickers: string[];
+  manualTickers: string;
+  profileId: string;
+};
+
+/** Same-tab memory. Route changes unmount the page, but this survives until an explicit clear. */
+let sessionDiscoverDraft: DiscoverDraft | null = null;
+
+function normalizeDraft(parsed: Partial<DiscoverDraft> | null): DiscoverDraft | null {
+  if (!parsed || typeof parsed.universeId !== 'string' || !Array.isArray(parsed.selectedTickers)) return null;
+  const selectedTickers = parsed.selectedTickers
+    .filter((row): row is string => typeof row === 'string')
+    .map((row) => validateTickerSymbol(row))
+    .flatMap((row) => (row.ok ? [row.ticker] : []))
+    .slice(0, 20);
+  return {
+    universeId: parsed.universeId,
+    directoryId: typeof parsed.directoryId === 'string' ? parsed.directoryId : '',
+    selectedTickers,
+    manualTickers: typeof parsed.manualTickers === 'string' ? parsed.manualTickers : '',
+    profileId: typeof parsed.profileId === 'string' ? parsed.profileId : '',
+  };
+}
 
 function readDiscoverDraft(): DiscoverDraft | null {
+  if (sessionDiscoverDraft) return sessionDiscoverDraft;
   try {
     const raw = localStorage.getItem(DISCOVER_DRAFT_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<DiscoverDraft>;
-    if (typeof parsed.universeId !== 'string' || !Array.isArray(parsed.selectedTickers)) return null;
-    const selectedTickers = parsed.selectedTickers
-      .filter((row): row is string => typeof row === 'string')
-      .map((row) => validateTickerSymbol(row))
-      .flatMap((row) => (row.ok ? [row.ticker] : []));
-    return {
-      universeId: parsed.universeId,
-      selectedTickers,
-      manualTickers: typeof parsed.manualTickers === 'string' ? parsed.manualTickers : '',
-    };
+    const draft = normalizeDraft(JSON.parse(raw) as Partial<DiscoverDraft>);
+    sessionDiscoverDraft = draft;
+    return draft;
   } catch {
     return null;
   }
 }
 
 function writeDiscoverDraft(draft: DiscoverDraft): void {
+  sessionDiscoverDraft = draft;
   try {
     localStorage.setItem(DISCOVER_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* storage unavailable; the in-memory draft still covers this browser session */
+  }
+}
+
+/** Test hook. The product clears a draft only through Clear selection or another explicit user action. */
+export function resetDiscoverSelectionDraft(): void {
+  sessionDiscoverDraft = null;
+  try {
+    localStorage.removeItem(DISCOVER_DRAFT_KEY);
   } catch {
     /* storage unavailable */
   }
@@ -115,13 +144,13 @@ export function DiscoverOpportunitiesPage() {
   const research = useResearchWorkspace();
   const [profiles, setProfiles] = useState<StrategyProfile[]>([SAL_PMCC_DEEP_ITM]);
   const [profilesFromServer, setProfilesFromServer] = useState(false);
-  const [profileId, setProfileId] = useState(SAL_PMCC_DEEP_ITM.id);
+  const initialDraft = useMemo(() => readDiscoverDraft(), []);
+  const [profileId, setProfileId] = useState(initialDraft?.profileId || SAL_PMCC_DEEP_ITM.id);
   const [universes, setUniverses] = useState<{
     curated: DiscoveryUniverse[];
     saved: DiscoveryUniverse[];
     bookmarkDerived: DiscoveryUniverse | null;
   }>({ curated: [], saved: [], bookmarkDerived: null });
-  const initialDraft = useMemo(() => readDiscoverDraft(), []);
   const [selectedUniverseId, setSelectedUniverseId] = useState(initialDraft?.universeId ?? '');
   const [selectedTickers, setSelectedTickers] = useState<string[]>(initialDraft?.selectedTickers ?? []);
   const [manualTickers, setManualTickers] = useState(initialDraft?.manualTickers ?? '');
@@ -138,8 +167,8 @@ export function DiscoverOpportunitiesPage() {
   const [scanMoreMode, setScanMoreMode] = useState<'diversified' | 'focus-ticker'>('diversified');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formOpen, setFormOpen] = useState(true);
-  const [directoryId, setDirectoryId] = useState('sp500');
-  const [directoryChosen, setDirectoryChosen] = useState(false);
+  const [directoryId, setDirectoryId] = useState(initialDraft?.directoryId || 'sp500');
+  const [directoryChosen, setDirectoryChosen] = useState(Boolean(initialDraft?.directoryId));
   const [showPrevious, setShowPrevious] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [manageCatalogId, setManageCatalogId] = useState<string | null>(null);
@@ -239,7 +268,9 @@ export function DiscoverOpportunitiesPage() {
       .then(([profileBody, universeBody]) => {
         setProfiles(profileBody.profiles.length > 0 ? profileBody.profiles : [SAL_PMCC_DEEP_ITM]);
         setProfilesFromServer(profileBody.profiles.length > 0);
-        setProfileId(profileBody.defaultProfileId || SAL_PMCC_DEEP_ITM.id);
+        if (!sessionDiscoverDraft?.profileId) {
+          setProfileId(profileBody.defaultProfileId || SAL_PMCC_DEEP_ITM.id);
+        }
         setUniverses(universeBody);
         const known = [
           ...universeBody.curated,
@@ -266,10 +297,6 @@ export function DiscoverOpportunitiesPage() {
       })
       .catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not load discovery data.'));
   }, [status, authenticated, policy]);
-
-  useEffect(() => {
-    writeDiscoverDraft({ universeId: selectedUniverseId, selectedTickers, manualTickers });
-  }, [selectedUniverseId, selectedTickers, manualTickers]);
 
   useEffect(() => {
     if (!selectedUniverse) return;
@@ -610,15 +637,40 @@ export function DiscoverOpportunitiesPage() {
     }
     return rows;
   }, [universes]);
+  const restoredDirectory = directories.find((row) => row.id === directoryId);
+  const restoredHasCompanies = (restoredDirectory?.universe?.tickers.length ?? 0) > 0;
   const activeDirectoryId =
-    directoryChosen && directories.some((row) => row.id === directoryId)
+    directoryChosen && restoredHasCompanies
       ? directoryId
       : (directories.find((row) => (row.universe?.tickers.length ?? 0) > 0)?.id ?? directoryId);
   useEffect(() => {
+    const listsReady = universes.curated.length > 0 || universes.saved.length > 0 || universes.bookmarkDerived != null;
+    const hasDraft = selectedTickers.length > 0 || manualTickers.trim().length > 0 || directoryChosen;
+    if (!listsReady && !hasDraft) return;
+    writeDiscoverDraft({
+      universeId: selectedUniverseId,
+      directoryId: directoryChosen ? directoryId : activeDirectoryId,
+      selectedTickers,
+      manualTickers,
+      profileId,
+    });
+  }, [
+    universes,
+    directoryChosen,
+    directoryId,
+    activeDirectoryId,
+    selectedUniverseId,
+    selectedTickers,
+    manualTickers,
+    profileId,
+  ]);
+  useEffect(() => {
     const active = directories.find((row) => row.id === activeDirectoryId);
     if (!active?.universe || selectedUniverseId === active.universe.id) return;
+    // A restored draft already names its category. Do not replace that selection on remount.
+    if (directoryChosen && selectedUniverseId) return;
     setSelectedUniverseId(active.universe.id);
-  }, [activeDirectoryId, directories, selectedUniverseId]);
+  }, [activeDirectoryId, directories, selectedUniverseId, directoryChosen]);
 
   if (status === 'loading') {
     return <Typography>Loading Explore Stocks.</Typography>;
