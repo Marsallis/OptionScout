@@ -146,6 +146,8 @@ SMART_SCAN_LIVE=true
 5. Recreate the container: `docker compose up -d --force-recreate`. Startup still does not scan or import until you ask.
 6. Sign in, open Settings, choose the brokerage portfolio, and turn on on-demand search. Then use Broker & Data when you want to import. Start a search only when you want market data.
 
+The steps above were checked against the local configuration parser and a blank secret file. A live token exchange with tastytrade was not run. Use your own application and your own refresh token. OptionScout never needs someone else's credentials or database.
+
 To disconnect, set those three values back to `false`, clear `secrets/tastytrade.env`, and recreate the container. Also revoke the OAuth application or refresh token in tastytrade. OptionScout does not keep the access token on disk. Revoking the refresh token at the provider stops new access even if a local copy remains.
 
 The provider allowlist rejects order paths. `ENABLE_ORDER_EXECUTION` cannot be set to anything but `false`.
@@ -258,6 +260,6 @@ More detail:
 
 OptionScout is released under the [MIT License](LICENSE). A public `v0.1.0` tag is a clean publication snapshot. It will not have the same Git commit ID as a private development tag that uses the same name.
 
-Copyright (c) 2026 OptionScout Local Owner. That is the author name recorded on this project's commits. The repository does not contain a separate personal or company legal name. Replace that line in `LICENSE` before you publish if you want different attribution.
+Copyright (c) 2026 Sal Talks Life. OptionScout is the name of the application. The MIT license covers this source tree. It does not cover third-party fund holdings files or market data from a brokerage.
 
 The MIT license applies to OptionScout source code, its documentation, and the fictional screenshots in `docs/images/`. It does not give anyone the right to redistribute third-party fund holdings files or market data from a brokerage or quote provider. Download holdings files from the fund company yourself, and use live quotes only under your own provider agreement.

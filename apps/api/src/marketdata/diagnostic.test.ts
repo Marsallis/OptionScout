@@ -15,11 +15,11 @@ import type { DxlinkSocket } from './session.js';
 
 const contexts: AppContext[] = [];
 const directories: string[] = [];
-const longSymbol = 'CVX   280121C00155000';
-const shortSymbol = 'CVX   261030C00227500';
+const longSymbol = 'ZZT   280121C00155000';
+const shortSymbol = 'ZZT   261030C00227500';
 const streamers: Record<string, string> = {
-  [longSymbol]: '.CVX280121C155',
-  [shortSymbol]: '.CVX261030C2275',
+  [longSymbol]: '.ZZT280121C155',
+  [shortSymbol]: '.ZZT261030C2275',
 };
 
 afterEach(() => {

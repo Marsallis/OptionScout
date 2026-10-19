@@ -6,8 +6,8 @@ import { portfolioSchema, type Portfolio, type PortfolioPosition } from '@option
 import { App } from '../App';
 import { brokerFixture, dashboardFixture, settingsFixture } from './fixtures';
 
-const longSymbol = 'CVX   280121C00155000';
-const shortSymbol = 'CVX   261030C00227500';
+const longSymbol = 'ZZT   280121C00155000';
+const shortSymbol = 'ZZT   261030C00227500';
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -20,7 +20,7 @@ function position(overrides: Partial<PortfolioPosition>): PortfolioPosition {
   return {
     id: 'pos-long',
     symbol: longSymbol,
-    underlying: 'CVX',
+    underlying: 'ZZT',
     optionRight: 'call',
     strike: '155',
     expiration: '2028-01-21',
@@ -221,7 +221,7 @@ function portfolio(confirmed: boolean): Portfolio {
       lines: [
         {
           id: 'cvx-closed-short',
-          underlying: 'CVX',
+          underlying: 'ZZT',
           symbol: shortSymbol,
           side: 'short' as const,
           status: 'closed',
@@ -269,7 +269,7 @@ function portfolio(confirmed: boolean): Portfolio {
       ? []
       : [
           {
-            underlying: 'CVX',
+            underlying: 'ZZT',
             longSymbol,
             shortSymbol,
             ambiguous: false,
@@ -277,7 +277,7 @@ function portfolio(confirmed: boolean): Portfolio {
           },
         ],
     strategies: confirmed
-      ? [{ id: 'strategy-1', underlying: 'CVX', longSymbol, createdAt: '2026-10-15T20:40:00.000Z', performance }]
+      ? [{ id: 'strategy-1', underlying: 'ZZT', longSymbol, createdAt: '2026-10-15T20:40:00.000Z', performance }]
       : [],
   };
 }
@@ -355,7 +355,7 @@ describe('authenticated brokerage portfolio', () => {
     );
   });
 
-  it('shows the CVX book, confirms a PMCC, and returns to the separate demo book', async () => {
+  it('shows the fictional ZZT book, confirms a PMCC, and returns to the separate demo book', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>

@@ -5,8 +5,8 @@ import { strategyPerformance, suggestPairings } from './strategy.js';
 
 const fees = { clearing: '0.00', regulatory: '0.00', proprietary: '0.00', other: '0.00' };
 const asOf = '2026-10-15T20:00:00.000Z';
-const longSymbol = 'CVX   280121C00155000';
-const shortSymbol = 'CVX   261030C00227500';
+const longSymbol = 'ZZT   280121C00155000';
+const shortSymbol = 'ZZT   261030C00227500';
 
 function transaction(overrides: Partial<AccountingTransaction> = {}): AccountingTransaction {
   return {
@@ -32,7 +32,7 @@ function position(overrides: Partial<AccountingPosition> = {}): AccountingPositi
   return {
     id: 'pos-long',
     providerSymbol: longSymbol,
-    underlyingSymbol: 'CVX',
+    underlyingSymbol: 'ZZT',
     instrumentType: 'Equity Option',
     quantity: '1',
     direction: 'long',
@@ -326,7 +326,7 @@ describe('options accounting', () => {
     const suggestions = suggestPairings(result.symbols);
     expect(suggestions).toEqual([
       {
-        underlying: 'CVX',
+        underlying: 'ZZT',
         longSymbol,
         shortSymbol,
         ambiguous: false,
@@ -350,7 +350,7 @@ describe('options accounting', () => {
 
     const ambiguous = suggestPairings([
       long,
-      { ...long, symbol: 'CVX   280121C00160000', positionId: 'other' },
+      { ...long, symbol: 'ZZT   280121C00160000', positionId: 'other' },
       short,
     ]);
     expect(ambiguous.every((item) => item.ambiguous)).toBe(true);

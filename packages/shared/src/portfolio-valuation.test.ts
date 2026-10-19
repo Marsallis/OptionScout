@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { buildMultiModeValuation, buildRealizedAudit, valueOpenLeg } from './portfolio-valuation.js';
 
 /**
- * Contemporaneous tastytrade snapshot used for CVX reconciliation QA.
- * Long mid $73.85 / short ask $4.25 reproduces the observed $845.75 combined
- * when long is marked at mid and short at ask — documenting that those must stay labeled separately.
+ * Fictional long/short pair used for valuation-mode regression.
+ * Long mid $73.85 / short ask $4.25 reproduces a combined illustration of $845.75
+ * when the long is marked at mid and the short at ask. Those modes stay labeled separately.
  */
-describe('CVX valuation modes', () => {
+describe('fictional valuation modes', () => {
   const long = {
-    symbol: 'CVX   280121C00155000',
+    symbol: 'ZZT   280121C00155000',
     direction: 'long' as const,
     openQuantity: '1',
     multiplier: '100',
@@ -21,7 +21,7 @@ describe('CVX valuation modes', () => {
     quoteFetchedAt: '2026-10-16T17:05:00.000Z',
   };
   const short = {
-    symbol: 'CVX   261016C00227500',
+    symbol: 'ZZT   261016C00227500',
     direction: 'short' as const,
     openQuantity: '1',
     multiplier: '100',
@@ -67,8 +67,8 @@ describe('realized audit', () => {
   it('does not treat open short credits as realized profit', () => {
     const audit = buildRealizedAudit([
       {
-        underlying: 'CVX',
-        symbol: 'CVX short',
+        underlying: 'ZZT',
+        symbol: 'ZZT short',
         multiplier: '100',
         cycles: [
           {

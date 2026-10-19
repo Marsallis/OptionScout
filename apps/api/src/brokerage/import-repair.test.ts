@@ -12,8 +12,8 @@ import { buildBrokerOverview } from './status.js';
 
 const contexts: AppContext[] = [];
 const directories: string[] = [];
-const longCall = 'CVX   280121C00155000';
-const shortCall = 'CVX   261030C00227500';
+const longCall = 'ZZT   280121C00155000';
+const shortCall = 'ZZT   261030C00227500';
 
 afterEach(() => {
   for (const context of contexts.splice(0)) context.close();

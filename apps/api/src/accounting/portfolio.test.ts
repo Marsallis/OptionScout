@@ -13,8 +13,8 @@ import { buildPortfolio, confirmStrategy } from './portfolio.js';
 
 const contexts: AppContext[] = [];
 const directories: string[] = [];
-const longSymbol = 'CVX   280121C00155000';
-const shortSymbol = 'CVX   261030C00227500';
+const longSymbol = 'ZZT   280121C00155000';
+const shortSymbol = 'ZZT   261030C00227500';
 
 afterEach(() => {
   for (const context of contexts.splice(0)) context.close();
@@ -74,7 +74,7 @@ describe('brokerage portfolio', () => {
         id: longId,
         brokerAccountId: accountId,
         providerSymbol: longSymbol,
-        underlyingSymbol: 'CVX',
+        underlyingSymbol: 'ZZT',
         optionSymbol: longSymbol,
         instrumentType: 'Equity Option',
         quantity: '1',
@@ -92,7 +92,7 @@ describe('brokerage portfolio', () => {
         id: shortId,
         brokerAccountId: accountId,
         providerSymbol: shortSymbol,
-        underlyingSymbol: 'CVX',
+        underlyingSymbol: 'ZZT',
         optionSymbol: shortSymbol,
         instrumentType: 'Equity Option',
         quantity: '1',
@@ -189,7 +189,7 @@ describe('brokerage portfolio', () => {
     expect(transfer?.realized).toBeNull();
 
     const confirmed = confirmStrategy(context.database.db, accountId, {
-      underlying: 'CVX',
+      underlying: 'ZZT',
       longSymbol,
       shortCycles: [{ providerSymbol: shortSymbol, openingTransactionId: '502' }],
     }, new Date('2026-10-15T20:10:00.000Z'));

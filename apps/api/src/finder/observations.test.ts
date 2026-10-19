@@ -57,7 +57,7 @@ describe('upsertObservationFromSnapshot field-level merge', () => {
   it('lets newer provider timestamps win and blocks older overwrites; omissions preserve existing', () => {
     const opened = tempDb();
     try {
-      const streamer = '.CVX280121C100';
+      const streamer = '.ZZT280121C100';
       upsertObservationFromSnapshot(opened.db, {
         snapshot: snapshot({
           streamerSymbol: streamer,
@@ -72,7 +72,7 @@ describe('upsertObservationFromSnapshot field-level merge', () => {
         }),
         instrumentKind: 'equity-option',
         underlying: 'CVX',
-        occSymbol: 'CVX   280121C00100000',
+        occSymbol: 'ZZT   280121C00100000',
         now: new Date('2026-10-15T13:00:10.000Z'),
       });
 

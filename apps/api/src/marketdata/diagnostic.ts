@@ -116,8 +116,8 @@ function accountingSnapshot(db: AppDatabase, now: Date) {
     };
   }
   const { reconstruction } = loadReconstruction(db, account.id, now);
-  const long = reconstruction.symbols.find((symbol) => symbol.symbol.includes('280121C00155000'));
-  const short = reconstruction.symbols.find((symbol) => symbol.symbol.includes('261030C00227500'));
+  const long = reconstruction.symbols.find((symbol) => symbol.direction === 'long' && symbol.openQuantity !== '0');
+  const short = reconstruction.symbols.find((symbol) => symbol.direction === 'short' && symbol.openQuantity !== '0');
   const openShorts = short?.cycles.filter((cycle) => cycle.side === 'short' && cycle.openQuantity !== '0') ?? [];
   const performance = long && short && openShorts.length > 0 ? strategyPerformance(long, openShorts.map((cycle) => ({ ledger: short, cycle }))) : null;
   const unresolvedCount = reconstruction.symbols.filter((symbol) => symbol.status === 'unreconciled' || symbol.status === 'missing-opening').length;
@@ -170,7 +170,7 @@ export async function runDxlinkDiagnostic(input: {
         .from(brokerPositions)
         .where(eq(brokerPositions.brokerAccountId, account.id))
         .all()
-        .filter((row) => row.status === 'open' && row.instrumentType === 'Equity Option' && row.underlyingSymbol === 'CVX')
+        .filter((row) => row.status === 'open' && row.instrumentType === 'Equity Option')
     : [];
   const { resolved, unresolved } = await resolveEquityOptions(
     input.client,
@@ -284,7 +284,7 @@ export async function runDxlinkDiagnostic(input: {
     keepaliveCount,
     closed: true,
     closeCode,
-    errors: unresolved.length > 0 ? ['No verified streamer symbol was available, so no socket was opened.'] : ['No open CVX option position was available.'],
+    errors: unresolved.length > 0 ? ['No verified streamer symbol was available, so no socket was opened.'] : ['No open option position was available.'],
     events: [],
     before,
     after,

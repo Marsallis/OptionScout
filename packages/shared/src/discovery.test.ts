@@ -19,7 +19,7 @@ function contract(overrides: Partial<DiscoveryContract> = {}): DiscoveryContract
   return {
     id: 'cvx-2028',
     underlying: 'CVX',
-    symbol: 'CVX   280121C00155000',
+    symbol: 'ZZT   280121C00155000',
     contractCost: '5500.00',
     delta: '0.82',
     intrinsicPercent: '85',

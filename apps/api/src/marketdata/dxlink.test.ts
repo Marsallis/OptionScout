@@ -143,8 +143,8 @@ describe('DXLink protocol', () => {
         return socket;
       },
     });
-    const longId = 'CVX   280121C00155000';
-    const streamer = '.CVX280121C155';
+    const longId = 'ZZT   280121C00155000';
+    const streamer = '.ZZT280121C155';
     session.subscribe({ consumerId: 'positions', instrumentId: longId, streamerSymbol: streamer, purpose: 'position' });
     session.subscribe({ consumerId: 'detail', instrumentId: ` ${longId} `, streamerSymbol: streamer, purpose: 'position' });
     const socket = await handshake(session, sockets);
@@ -168,7 +168,7 @@ describe('DXLink protocol', () => {
     expect(quote.row?.greeks?.delta).toBeNull();
     expect(quote.row?.greeks?.theta).toBe(-0.04);
 
-    session.subscribe({ consumerId: 'research', instrumentId: 'CVX   261030C00227500', streamerSymbol: '.CVX261030C227.5', purpose: 'research' });
+    session.subscribe({ consumerId: 'research', instrumentId: 'ZZT   261030C00227500', streamerSymbol: '.ZZT261030C227.5', purpose: 'research' });
     expect(socket.sent.filter((frame) => frame.type === 'FEED_SUBSCRIPTION')).toHaveLength(2);
     session.unsubscribe('detail', longId);
     expect(socket.sent.some((frame) => frame.remove)).toBe(false);
