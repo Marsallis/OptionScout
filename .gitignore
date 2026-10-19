@@ -22,6 +22,9 @@ backups/
 # Local editor/agent state
 .cursor/
 
+# Temporary brand-kit drop. Production assets are copied into apps/web.
+_brand-reference/
+
 data/
 *.sqlite
 *.sqlite3
