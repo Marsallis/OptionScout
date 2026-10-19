@@ -47,6 +47,8 @@ These pictures are from the simulated book and simulated research. They are not 
 
 ![Simulated portfolio overview](docs/images/overview.png)
 
+![Overview on a narrow screen](docs/images/overview-mobile.png)
+
 ![Explore Stocks company picker](docs/images/explore-stocks.png)
 
 ![Simulated LEAPS contract results](docs/images/leaps-results.png)
