@@ -617,7 +617,7 @@ export function LeapsFinderPage() {
         </Alert>
       ) : null}
       <SuccessToast message={notice} />
-      {notice ? (
+      {notice && !/^Saved\b/i.test(notice) ? (
         <Alert severity={scan?.status === 'failed' ? 'error' : 'info'}>
           {notice}
           {scan?.status === 'failed' ? (

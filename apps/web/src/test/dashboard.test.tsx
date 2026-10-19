@@ -39,7 +39,7 @@ describe('dashboard rendering', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByText('OptionScout')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'OptionScout' })).toBeInTheDocument();
     expect(screen.getByTestId('demo-banner')).toHaveTextContent('DEMO MODE');
     expect(screen.getByText(DEMO_DISCLAIMER)).toBeInTheDocument();
     expect(screen.getByText('AAPL')).toBeInTheDocument();
