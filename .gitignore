@@ -1,0 +1,37 @@
+node_modules/
+dist/
+coverage/
+.vite/
+
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+secrets/
+references/private/
+
+# Owner account audits generated from the live brokerage volume (personal trade history).
+docs/realized-audit-raw.json
+docs/realized-audit-err.txt
+docs/realized-pl-final-reconciliation.md
+docs/portfolio-valuation-reconciliation.md
+backups/
+
+# Local editor/agent state
+.cursor/
+
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+*.tsbuildinfo

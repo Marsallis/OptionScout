@@ -1,0 +1,250 @@
+/**
+ * Client-loadable WMT analysis scan for beginner UX acceptance.
+ * Labeled simulated — never live market data; no brokerage calls.
+ */
+
+import { SHOW_PROFILE_MISSES } from './discovery.js';
+import type { FinderCandidate, FinderScanResult } from './finder.js';
+import { SAL_PMCC_DEEP_ITM } from './strategy-profile.js';
+import { WMT_ANALYSIS_FIXTURE_NOTICE, WMT_ANALYSIS_REFERENCE, buildWmtAnalysisCandidate } from './wmt-analysis-fixture.js';
+
+function nearLowerDelta(): FinderCandidate {
+  const base = buildWmtAnalysisCandidate();
+  return buildWmtAnalysisCandidate({
+    id: 'fixture-wmt-90c-2028-01-21',
+    occSymbol: 'WMT   280121C00090000',
+    streamerSymbol: '.WMT280121C90',
+    strike: '90.00',
+    bid: '32.10',
+    ask: '33.40',
+    mark: '32.75',
+    delta: '0.7810',
+    outcome: 'near',
+    label: 'Near Match',
+    calculations: {
+      ...base.calculations,
+      intrinsicValue: '28.70',
+      estimatedPurchaseCost: '3340.00',
+      extrinsicValue: '4.70',
+      intrinsicPercent: '85.93',
+      bidAskSpreadDollars: '1.30',
+      bidAskSpreadPercent: '3.97',
+      expirationBreakEven: '123.40',
+      strikeDistance: '28.70',
+      quoteSourceLabel: 'SIMULATED WMT analysis fixture (not live)',
+    },
+    metrics: {
+      ...base.metrics,
+      purchaseCost: 3340,
+      delta: 0.781,
+      intrinsicPercent: 85.93,
+      extrinsicValue: 4.7,
+      bidAskSpread: 3.97,
+    },
+    reasons: [
+      {
+        metric: 'purchaseCost',
+        kind: 'preference',
+        passed: true,
+        target: '6000.00',
+        actual: '3340.00',
+        difference: null,
+        text: 'Purchase cost is below the 6000.00 preferred target.',
+      },
+      {
+        metric: 'delta',
+        kind: 'hard',
+        passed: true,
+        target: '0.75',
+        actual: '0.7810',
+        difference: null,
+        text: 'Long delta meets the hard minimum.',
+      },
+      {
+        metric: 'delta',
+        kind: 'preference',
+        passed: false,
+        target: '0.80',
+        actual: '0.7810',
+        difference: null,
+        text: 'Long delta is below the 0.80 preferred target.',
+      },
+      {
+        metric: 'liquidity',
+        kind: 'unconfigured',
+        passed: false,
+        target: null,
+        actual: null,
+        difference: null,
+        text: 'Open-interest and volume thresholds are not configured.',
+      },
+    ],
+  });
+}
+
+function outsideHigherCost(): FinderCandidate {
+  const base = buildWmtAnalysisCandidate();
+  return buildWmtAnalysisCandidate({
+    id: 'fixture-wmt-55c-2028-01-21',
+    occSymbol: 'WMT   280121C00055000',
+    streamerSymbol: '.WMT280121C55',
+    strike: '55.00',
+    bid: '71.00',
+    ask: '72.50',
+    mark: '71.75',
+    delta: '0.9400',
+    outcome: 'outside-profile',
+    label: 'Outside Profile',
+    meetsConfiguredNumericRequirements: false,
+    calculations: {
+      ...base.calculations,
+      intrinsicValue: '63.70',
+      estimatedPurchaseCost: '7250.00',
+      extrinsicValue: '8.80',
+      intrinsicPercent: '87.86',
+      bidAskSpreadDollars: '1.50',
+      bidAskSpreadPercent: '2.09',
+      expirationBreakEven: '127.50',
+      strikeDistance: '63.70',
+      quoteSourceLabel: 'SIMULATED WMT analysis fixture (not live)',
+    },
+    metrics: {
+      ...base.metrics,
+      purchaseCost: 7250,
+      delta: 0.94,
+      intrinsicPercent: 87.86,
+      extrinsicValue: 8.8,
+      bidAskSpread: 2.09,
+    },
+    reasons: [
+      {
+        metric: 'purchaseCost',
+        kind: 'hard',
+        passed: false,
+        target: '7000.00',
+        actual: '7250.00',
+        difference: null,
+        text: 'Contract cost is above the 7000.00 hard maximum.',
+      },
+      {
+        metric: 'purchaseCost',
+        kind: 'preference',
+        passed: false,
+        target: '6000.00',
+        actual: '7250.00',
+        difference: null,
+        text: 'Contract cost is not below the 6000.00 ideal.',
+      },
+      {
+        metric: 'delta',
+        kind: 'hard',
+        passed: true,
+        target: '0.75',
+        actual: '0.9400',
+        difference: null,
+        text: 'Long delta meets the hard minimum.',
+      },
+      {
+        metric: 'liquidity',
+        kind: 'unconfigured',
+        passed: false,
+        target: null,
+        actual: null,
+        difference: null,
+        text: 'Open-interest and volume thresholds are not configured.',
+      },
+    ],
+  });
+}
+
+/** Builds a completed Finder scan result from the labeled WMT analysis fixture (client-side only). */
+export function buildWmtAnalysisScanResult(profile = SAL_PMCC_DEEP_ITM): FinderScanResult {
+  const primary = buildWmtAnalysisCandidate();
+  const candidates = [primary, nearLowerDelta(), outsideHigherCost()];
+  const now = '2026-10-15T20:00:01.000Z';
+  return {
+    scanId: 'fixture-wmt-analysis-scan',
+    status: 'completed',
+    mode: 'demo-fixture',
+    underlying: WMT_ANALYSIS_REFERENCE.underlying,
+    profileId: profile.id,
+    profileName: profile.name,
+    profileRevision: profile.revision,
+    scanPriority: 'closest-to-strategy',
+    startedAt: now,
+    finishedAt: now,
+    asOfDate: '2026-10-15',
+    screeningFreshnessSeconds: 60,
+    message: WMT_ANALYSIS_FIXTURE_NOTICE,
+    progress: {
+      discovered: 3,
+      standardCalls: 3,
+      putsDiscovered: 0,
+      unsupportedAdjusted: 0,
+      missingStreamer: 0,
+      eligibleLeaps: 3,
+      evaluationBudget: 24,
+      selectedForEvaluation: 3,
+      evaluated: 3,
+      fullyEvaluated: 3,
+      partiallyEvaluated: 0,
+      notYetEvaluated: 0,
+      remaining: 0,
+      awaitingData: 0,
+      unavailableData: 0,
+      missingProviderGreeks: 0,
+      missingValidQuotes: 0,
+      withinHardBudget: 2,
+      meetsAssessableNumericRequirements: 2,
+      incompleteMissingData: 0,
+      expirationsEligible: 1,
+      expirationsRepresented: 1,
+      estimatedRequestBudgetUsed: 0,
+      canRetryMissingData: false,
+      lastScanPriority: 'closest-to-strategy',
+      partial: false,
+      cancelled: false,
+      exhausted: true,
+      canScanMore: false,
+      batchSize: 8,
+      coverageSummary: 'SIMULATED WMT analysis fixture — three labeled contracts for UI acceptance only.',
+      selectionAlgorithm: 'client-side WMT analysis fixture (not a live selection run)',
+      plain: {
+        headline: 'Loaded the labeled WMT analysis fixture (not live market data).',
+        eligibleMeaning: 'These rows are a fixed acceptance set, not a brokerage chain scan.',
+        batchStatus: 'universe-examined',
+        eligibleLongDatedCalls: 3,
+        uniqueContractsAttempted: 3,
+        fullyEvaluated: 3,
+        partiallyEvaluated: 0,
+        notYetEvaluated: 0,
+        withinHardBudget: 2,
+        meetsAssessableNumericRequirements: 2,
+        incompleteMissingData: 0,
+        expirationCoverage: 'One simulated January 2028 expiration.',
+        moneynessCoverage: 'Deep ITM long calls for strategy-fit and comparison demos.',
+        snapshotSource: 'SIMULATED WMT analysis fixture',
+        snapshotAt: now,
+        nextStepHint: 'Open View Analysis on the $80 call, then Compare 2–3 contracts.',
+      },
+    },
+    coverageNotes: [
+      {
+        code: 'liquidity-unassessed-only',
+        text: 'Open interest and volume remain Unassessed on this fixture. Unconfigured liquidity is never treated as passed.',
+      },
+    ],
+    marketContext: {
+      underlyingPrice: WMT_ANALYSIS_REFERENCE.stockPrice,
+      underlyingQuoteAt: now,
+      marketSession: 'closed',
+      dataSource: 'SIMULATED WMT analysis fixture — not a brokerage chain',
+      simulated: true,
+      simulatedNotice: WMT_ANALYSIS_FIXTURE_NOTICE,
+      quoteSkewWarning: null,
+    },
+    tolerances: { ...SHOW_PROFILE_MISSES },
+    candidates,
+    error: null,
+  };
+}
