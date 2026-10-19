@@ -7,7 +7,7 @@ This project is not a brokerage and it cannot place orders. Please keep it that 
 ## Before you write code
 
 1. Follow the [README](README.md) quick start, or use Node 22 with `npm ci`.
-2. Read [docs/architecture.md](docs/architecture.md) for how data moves, and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the commands.
+2. Read [docs/architecture.md](docs/architecture.md) for how data moves, [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the commands, and [docs/BRAND.md](docs/BRAND.md) for color, type, and motion.
 3. OptionScout is MIT licensed. That license covers this source tree. It does not cover third-party holdings files or provider market data.
 
 ## How the repository is organized

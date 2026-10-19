@@ -1,5 +1,7 @@
 # OptionScout
 
+![OptionScout wordmark](docs/images/wordmark.png)
+
 A free, local-first LEAPS options research application that helps investors discover stocks, evaluate long-dated calls against personalized strategies, and understand their existing options positions.
 
 OptionScout is educational research software. It is not a brokerage, a trading bot, or a financial advisor. It does not place orders, and it does not tell you what to buy.
