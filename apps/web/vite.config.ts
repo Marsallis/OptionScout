@@ -23,5 +23,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: true,
+    // A GitHub runner can spend 4–6s in one MUI interaction. Vitest's 5s default then fails the test before its assertion.
+    testTimeout: 15_000,
   },
 });
