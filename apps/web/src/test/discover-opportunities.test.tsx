@@ -71,6 +71,9 @@ vi.mock('../api/client', () => ({
   patchResearchSessionUiPrefs: mocks.patchResearchSessionUiPrefs,
 }));
 
+/** Full-page MUI interactions take about 3–6s on a GitHub runner. Vitest's default test limit is 5s. */
+const SLOW_UI_MS = 15_000;
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -222,7 +225,7 @@ describe('Discover Opportunities page', () => {
     expect(await screen.findByText(/We checked 3 companies/i)).toBeInTheDocument();
     expect(screen.getByText(/Filter and compare results/i)).toBeInTheDocument();
     expect(screen.getByText(/Research so far/i)).toBeInTheDocument();
-  });
+  }, SLOW_UI_MS);
 
   it('selects a ready collection without requesting market data', async () => {
     const user = userEvent.setup();
@@ -301,7 +304,7 @@ describe('Discover Opportunities page', () => {
     expect(screen.getByText(/not because credentials failed/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Find Matching LEAPS' })).toBeDisabled();
     expect(mocks.createSmartScan).not.toHaveBeenCalled();
-  });
+  }, SLOW_UI_MS);
 
   it('shows normal mode ready banner and company search when policy is normal live', async () => {
     const user = userEvent.setup();
@@ -353,7 +356,7 @@ describe('Discover Opportunities page', () => {
     const callsBefore = mocks.createSmartScan.mock.calls.length;
     await user.click(screen.getAllByRole('button', { name: 'View Previous Results' })[0]!);
     expect(mocks.createSmartScan.mock.calls.length).toBe(callsBefore);
-  });
+  }, SLOW_UI_MS);
 
   it('restores the latest saved session on mount without starting research', async () => {
     mocks.fetchLatestResearchSession.mockResolvedValue(savedSession('OLD SESSION MARKER', 'old_session'));
@@ -386,7 +389,7 @@ describe('Discover Opportunities page', () => {
     finished.tickers = running.tickers;
     releaseFetch(finished);
     expect(await screen.findByText(/No Best Matches in the contracts evaluated so far/i)).toBeInTheDocument();
-  });
+  }, SLOW_UI_MS);
 
   it('pauses without cancelling the session and leaves remaining companies resumable', async () => {
     const user = userEvent.setup();
@@ -417,7 +420,7 @@ describe('Discover Opportunities page', () => {
     expect(mocks.cancelSmartScan).not.toHaveBeenCalled();
     expect(mocks.scanSmartNextCompanies).not.toHaveBeenCalled();
     expect((await screen.findAllByText(/Batch finished/i)).length).toBeGreaterThan(0);
-  });
+  }, SLOW_UI_MS);
 
   it('starts a second session for the same companies without replacing the first request', async () => {
     const user = userEvent.setup();
@@ -433,7 +436,7 @@ describe('Discover Opportunities page', () => {
     expect(mocks.createSmartScan).toHaveBeenCalledTimes(2);
     expect(mocks.createSmartScan.mock.calls[1]?.[0]).toMatchObject({ tickers: ['AAPL'] });
     expect(mocks.cancelSmartScan).not.toHaveBeenCalled();
-  });
+  }, SLOW_UI_MS);
 
   it('does not start or cancel research when the page is left during a running search', async () => {
     const running = savedSession('Scan starting.', 'smart_leave').result;
