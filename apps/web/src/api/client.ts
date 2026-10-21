@@ -281,6 +281,63 @@ export async function deleteStrategyProfile(profileId: string): Promise<void> {
   }
 }
 
+const savedIdeasSchema = z.object({
+  ideas: z.array(z.object({
+    id: z.string(),
+    kind: z.enum(['pmcc-setup', 'leaps-idea']),
+    underlying: z.string(),
+    longOcc: z.string(),
+    shortOcc: z.string().nullable(),
+    quoteAsOf: z.string().nullable(),
+    notes: z.string(),
+    hypothetical: z.literal(true),
+  })),
+});
+
+export type SavedIdea = z.infer<typeof savedIdeasSchema>['ideas'][number];
+
+export function fetchSavedIdeas(): Promise<{ ideas: SavedIdea[] }> {
+  return requestJson('/api/saved-ideas', savedIdeasSchema);
+}
+
+export function createSavedIdea(body: {
+  underlying: string;
+  longOcc: string;
+  shortOcc?: string;
+  notes?: string;
+  quoteAsOf?: string | null;
+  profileId?: string | null;
+  profileRevision?: number | null;
+  sessionId?: string | null;
+}): Promise<SavedIdea> {
+  return requestJson('/api/saved-ideas', savedIdeasSchema.shape.ideas.element, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function saveBrokerCredentials(body: {
+  environment: 'sandbox' | 'production';
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}): Promise<BrokerOverview> {
+  return requestJson('/api/broker/credentials', brokerOverviewSchema, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function disconnectBroker(): Promise<BrokerOverview> {
+  return requestJson('/api/broker/disconnect', brokerOverviewSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
+export function testBrokerConnection(): Promise<BrokerOverview> {
+  return requestJson('/api/broker/test-connection', brokerOverviewSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
 export function fetchFinderBookmarks(): Promise<FinderBookmarksResponse> {
   return requestJson('/api/finder/bookmarks', finderBookmarksResponseSchema);
 }

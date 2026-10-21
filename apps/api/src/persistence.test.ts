@@ -65,7 +65,7 @@ describe('persistence across restart', () => {
       expect(settings.density).toBe('compact');
       expect(dashboard.summary.openPositions).toBe(4);
       expect(dashboard.demo).toBe(true);
-      expect(migrations.count).toBe(14);
+      expect(migrations.count).toBe(15);
       expect(positions.count).toBe(4);
     } finally {
       await second.close();

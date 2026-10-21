@@ -52,6 +52,7 @@ import { buildPortfolio, confirmStrategy, deleteStrategy } from './accounting/po
 import type { AppContext } from './context.js';
 import { quoteSnapshots } from './db/schema.js';
 import { deleteFinderBookmark, listFinderBookmarks, saveFinderBookmark } from './finder/bookmarks.js';
+import { SavedIdeaError, createSavedIdea, deleteSavedIdea, listSavedIdeas } from './finder/saved-ideas.js';
 import {
   cancelFinderScan,
   continueFinderScan,
@@ -176,6 +177,10 @@ function selectedAccountId(context: AppContext): string {
 }
 
 function sendKnownError(res: Response, error: unknown): boolean {
+  if (error instanceof SavedIdeaError) {
+    res.status(error.message.includes('not found') ? 404 : 400).json({ error: error.message });
+    return true;
+  }
   if (error instanceof CredentialInputError) {
     res.status(400).json({ error: error.message });
     return true;
@@ -759,6 +764,46 @@ export function registerRoutes(app: Express, context: AppContext): void {
         res.status(error.status).json({ error: error.message });
         return;
       }
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.get('/api/saved-ideas', (req, res, next) => {
+    try {
+      requireSession(req, context);
+      res.json({ ideas: listSavedIdeas(context.database.db) });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/saved-ideas', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const created = createSavedIdea(context.database.db, {
+        underlying: String(req.body?.underlying ?? ''),
+        longOcc: String(req.body?.longOcc ?? ''),
+        shortOcc: typeof req.body?.shortOcc === 'string' ? req.body.shortOcc : null,
+        profileId: typeof req.body?.profileId === 'string' ? req.body.profileId : null,
+        profileRevision: typeof req.body?.profileRevision === 'number' ? req.body.profileRevision : null,
+        sessionId: typeof req.body?.sessionId === 'string' ? req.body.sessionId : null,
+        quoteAsOf: typeof req.body?.quoteAsOf === 'string' ? req.body.quoteAsOf : null,
+        notes: typeof req.body?.notes === 'string' ? req.body.notes : '',
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.delete('/api/saved-ideas/:id', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      deleteSavedIdea(context.database.db, String(req.params.id));
+      res.status(204).end();
+    } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
   });

@@ -9,6 +9,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { disconnectBroker, fetchPortfolio, saveBrokerCredentials, testBrokerConnection } from '../api/client';
 import { useAppState } from '../state/AppState';
 
 export function BrokerPage() {
@@ -70,8 +71,9 @@ export function BrokerPage() {
         Broker & Data
       </Typography>
       <Alert severity="info" icon={false}>
-        {broker.disclaimer} Read-only access only. Order routing stays off.
+        {broker.disclaimer} Read-only access only. Order routing stays off. A local file is not encryption, and a Docker data-volume backup can include the credential file.
       </Alert>
+      <ConnectionGuide signedIn={session?.authenticated === true} onNotice={(tone, text) => { setNoticeTone(tone); setNotice(text); }} />
       {notice ? <Alert severity={noticeTone}>{notice}</Alert> : null}
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
         <Typography variant="h6">Owner sign-in</Typography>
@@ -179,7 +181,7 @@ export function BrokerPage() {
         )}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
           <Button variant="contained" disabled={busy || !session?.authenticated} onClick={() => void runSync('recent')}>
-            Sync recent history
+            Import / Refresh Positions
           </Button>
           <TextField
             label="Backfill start"
@@ -194,6 +196,62 @@ export function BrokerPage() {
         </Stack>
       </Paper>
     </Stack>
+  );
+}
+
+function ConnectionGuide({ signedIn, onNotice }: { signedIn: boolean; onNotice: (tone: 'info' | 'warning' | 'success', text: string) => void }) {
+  const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [refreshToken, setRefreshToken] = useState('');
+  const [closed, setClosed] = useState<string[]>([]);
+  return (
+    <Paper id="accounting" sx={{ p: { xs: 2, md: 3 } }}>
+      <Typography variant="h6">Connect tastytrade</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        tastytrade is optional and read-only. Create a personal OAuth application, then Create Grant with the read scope only. Production and sandbox credentials are not interchangeable. Saving stores the values on this computer and does not import positions or run a search. Revoking the grant at tastytrade is a separate step from Disconnect.
+      </Typography>
+      {signedIn ? (
+        <Stack spacing={1.25} sx={{ mt: 1.5, maxWidth: 480 }}>
+          <TextField select size="small" label="Environment" value={environment} onChange={(event) => setEnvironment(event.target.value as 'sandbox' | 'production')}>
+            <MenuItem value="production">Production</MenuItem>
+            <MenuItem value="sandbox">Sandbox</MenuItem>
+          </TextField>
+          <TextField size="small" label="Client ID" value={clientId} onChange={(event) => setClientId(event.target.value)} autoComplete="off" />
+          <TextField size="small" label="Client Secret" type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} autoComplete="off" />
+          <TextField size="small" label="Refresh token" type="password" value={refreshToken} onChange={(event) => setRefreshToken(event.target.value)} autoComplete="off" />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button variant="contained" onClick={() => {
+              void saveBrokerCredentials({ environment, clientId, clientSecret, refreshToken })
+                .then((body) => {
+                  setClientSecret('');
+                  setRefreshToken('');
+                  onNotice('success', body.connection.message);
+                })
+                .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Could not save credentials.'));
+            }}>Save credentials</Button>
+            <Button variant="outlined" onClick={() => {
+              void testBrokerConnection()
+                .then((body) => onNotice(body.connection.accountChangePending ? 'warning' : 'success', body.connection.message))
+                .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Connection test failed.'));
+            }}>Test Connection</Button>
+            <Button variant="text" onClick={() => {
+              void disconnectBroker()
+                .then((body) => onNotice('info', body.connection.message))
+                .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Disconnect failed.'));
+            }}>Disconnect</Button>
+          </Stack>
+          <Button variant="text" onClick={() => {
+            void fetchPortfolio()
+              .then((portfolio) => setClosed(portfolio.positions.filter((row) => row.direction === 'flat').map((row) => `${row.underlying} ${row.symbol}`)))
+              .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'History is unavailable.'));
+          }}>Show accounting history</Button>
+          {closed.length > 0 ? <Typography variant="body2">Closed contracts: {closed.join('; ')}</Typography> : null}
+        </Stack>
+      ) : (
+        <Typography variant="body2" sx={{ mt: 1.5 }}>Sign in before entering brokerage credentials.</Typography>
+      )}
+    </Paper>
   );
 }
 

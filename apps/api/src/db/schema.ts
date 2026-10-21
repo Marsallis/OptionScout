@@ -220,6 +220,22 @@ export const strategyGroups = sqliteTable('strategy_groups', {
   createdAt: text('created_at').notNull(),
 });
 
+export const savedPmccIdeas = sqliteTable('saved_pmcc_ideas', {
+  id: text('id').primaryKey(),
+  underlying: text('underlying').notNull(),
+  longOcc: text('long_occ').notNull(),
+  shortOcc: text('short_occ'),
+  profileId: text('profile_id'),
+  profileRevision: integer('profile_revision'),
+  sessionId: text('session_id'),
+  quoteAsOf: text('quote_as_of'),
+  notes: text('notes').notNull(),
+  longSnapshotJson: text('long_snapshot_json').notNull(),
+  shortSnapshotJson: text('short_snapshot_json'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const strategyMembers = sqliteTable('strategy_members', {
   id: text('id').primaryKey(),
   strategyGroupId: text('strategy_group_id').notNull(),
