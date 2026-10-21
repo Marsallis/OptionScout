@@ -180,9 +180,14 @@ export function saveManagedCredentials(
   }
 }
 
+const ACCOUNT_CHOICES_KEY = 'broker.account.choices';
+const stagedAccounts = new Map<string, { environment: string; accountNumber: string; accountType: string }>();
+
 export function disconnectBroker(db: AppDatabase, databasePath: string): void {
+  stagedAccounts.clear();
   writeMeta(db, CONNECTION_MODE_KEY, 'disconnected');
   writeMeta(db, PENDING_FINGERPRINT_KEY, '');
+  writeMeta(db, ACCOUNT_CHOICES_KEY, '');
   const managed = managedSecretPath(databasePath);
   if (fs.existsSync(managed)) fs.rmSync(managed, { force: true });
 }
@@ -192,19 +197,62 @@ export function accountFingerprint(environment: string, accountNumbers: string[]
   return createHash('sha256').update(`${environment}\n${names.join('\n')}`).digest('hex');
 }
 
-export function singleAccountImport(db: AppDatabase, environment: string, accountNumbers: string[]): { fingerprint: string } {
-  if (accountNumbers.length === 0) {
-    throw new Error('The brokerage did not confirm an account. Nothing was imported.');
+export type AccountChoice = { choiceId: string; maskedAccount: string; accountType: string };
+
+export function stageAccountChoices(
+  db: AppDatabase,
+  environment: string,
+  accounts: Array<{ accountNumber: string; accountType: string }>,
+): AccountChoice[] {
+  stagedAccounts.clear();
+  const choices = accounts.map((account) => {
+    const choiceId = createHash('sha256').update(`${environment}\n${account.accountNumber}`).digest('hex').slice(0, 16);
+    stagedAccounts.set(choiceId, { environment, accountNumber: account.accountNumber, accountType: account.accountType });
+    const tail = account.accountNumber.slice(-4);
+    return { choiceId, maskedAccount: `••••${tail}`, accountType: account.accountType };
+  });
+  writeMeta(db, ACCOUNT_CHOICES_KEY, JSON.stringify(choices));
+  return choices;
+}
+
+export function readAccountChoices(db: AppDatabase): AccountChoice[] {
+  const raw = readMeta(db, ACCOUNT_CHOICES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const choice = item as { choiceId?: unknown; maskedAccount?: unknown; accountType?: unknown };
+      if (typeof choice.choiceId !== 'string' || typeof choice.maskedAccount !== 'string' || typeof choice.accountType !== 'string') return [];
+      if (/\d{5,}/.test(choice.maskedAccount)) return [];
+      return [{ choiceId: choice.choiceId, maskedAccount: choice.maskedAccount, accountType: choice.accountType }];
+    });
+  } catch {
+    return [];
   }
-  if (accountNumbers.length > 1) {
-    throw new Error('This install keeps one brokerage account. The grant can see more than one account, so nothing was imported. Use a separate OptionScout data volume for another account.');
+}
+
+export function chooseStagedAccount(db: AppDatabase, choiceId: string): { fingerprint: string; maskedAccount: string; accountType: string } {
+  const staged = stagedAccounts.get(choiceId);
+  if (!staged) {
+    throw new Error('Choose an account from the latest connection test. Nothing was imported.');
   }
-  const fingerprint = accountFingerprint(environment, accountNumbers);
+  const fingerprint = accountFingerprint(staged.environment, [staged.accountNumber]);
   if (importNeedsDecision(db, fingerprint)) {
     rememberPendingFingerprint(db, fingerprint);
-    throw new Error('This grant is for a different account or environment than the imported history. Existing records were not changed or combined. Use a separate Docker data volume for that account.');
+    throw new Error('This account or environment is different from the imported history. Existing records were not changed. Use a separate Docker data volume for that account.');
   }
-  return { fingerprint };
+  writeMeta(db, 'broker.selected.account', staged.accountNumber);
+  writeMeta(db, 'broker.selected.environment', staged.environment);
+  return { fingerprint, maskedAccount: `••••${staged.accountNumber.slice(-4)}`, accountType: staged.accountType };
+}
+
+export function selectedImportAccount(db: AppDatabase): { accountNumber: string; environment: string } | null {
+  const accountNumber = readMeta(db, 'broker.selected.account');
+  const environment = readMeta(db, 'broker.selected.environment');
+  if (!accountNumber || (environment !== 'sandbox' && environment !== 'production')) return null;
+  return { accountNumber, environment };
 }
 
 export function importNeedsDecision(db: AppDatabase, nextFingerprint: string): boolean {

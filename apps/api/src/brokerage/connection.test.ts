@@ -19,7 +19,9 @@ import {
   rememberImportFingerprint,
   resolveActiveConnection,
   saveManagedCredentials,
-  singleAccountImport,
+  selectedImportAccount,
+  stageAccountChoices,
+  chooseStagedAccount,
   validateCredentialInput,
 } from './connection.js';
 
@@ -93,15 +95,34 @@ describe('brokerage connection precedence', () => {
     expect(blocked.credentials?.clientSecret).toBe('managed-secret-value');
   });
 
-  it('requires an explicit decision when the imported account fingerprint changes', () => {
+  it('lists every accessible account and imports only the one the owner confirms', () => {
     const { db } = layout();
-    rememberImportFingerprint(db, accountFingerprint('production', ['AAA']));
-    expect(importNeedsDecision(db, accountFingerprint('production', ['AAA']))).toBe(false);
-    expect(importNeedsDecision(db, accountFingerprint('sandbox', ['AAA']))).toBe(true);
-    expect(importNeedsDecision(db, accountFingerprint('production', ['BBB']))).toBe(true);
-    expect(() => singleAccountImport(db, 'production', ['AAA', 'BBB'])).toThrow(/one brokerage account/);
-    expect(() => singleAccountImport(db, 'sandbox', ['AAA'])).toThrow(/different account or environment/);
-    expect(singleAccountImport(db, 'production', ['AAA']).fingerprint).toBe(accountFingerprint('production', ['AAA']));
+    const one = stageAccountChoices(db, 'production', [{ accountNumber: 'FICTIONAL1', accountType: 'Individual' }]);
+    expect(one).toHaveLength(1);
+    expect(one[0]?.maskedAccount).toBe('••••NAL1');
+    expect(JSON.stringify(one)).not.toContain('FICTIONAL1');
+    expect(() => chooseStagedAccount(db, one[0]?.choiceId ?? '')).not.toThrow();
+    expect(selectedImportAccount(db)).toEqual({ accountNumber: 'FICTIONAL1', environment: 'production' });
+
+    const many = stageAccountChoices(db, 'production', [
+      { accountNumber: 'FICTIONAL1', accountType: 'Individual' },
+      { accountNumber: 'FICTIONAL2', accountType: 'IRA' },
+    ]);
+    expect(many.map((choice) => choice.maskedAccount)).toEqual(['••••NAL1', '••••NAL2']);
+    expect(JSON.stringify(many)).not.toContain('FICTIONAL2');
+    const again = many.find((choice) => choice.maskedAccount.endsWith('NAL1'));
+    expect(again).toBeTruthy();
+    rememberImportFingerprint(db, accountFingerprint('production', ['FICTIONAL1']));
+    expect(() => chooseStagedAccount(db, again?.choiceId ?? '')).not.toThrow();
+    const other = many.find((choice) => choice.maskedAccount.endsWith('NAL2'));
+    expect(() => chooseStagedAccount(db, other?.choiceId ?? '')).toThrow(/different from the imported history/);
+    expect(selectedImportAccount(db)?.accountNumber).toBe('FICTIONAL1');
+
+    const sandbox = stageAccountChoices(db, 'sandbox', [{ accountNumber: 'FICTIONAL1', accountType: 'Individual' }]);
+    expect(() => chooseStagedAccount(db, sandbox[0]?.choiceId ?? '')).toThrow(/different from the imported history/);
+    expect(selectedImportAccount(db)).toEqual({ accountNumber: 'FICTIONAL1', environment: 'production' });
+    expect(importNeedsDecision(db, accountFingerprint('sandbox', ['FICTIONAL1']))).toBe(true);
+    expect(importNeedsDecision(db, accountFingerprint('production', ['FICTIONAL1']))).toBe(false);
   });
 
   it('leaves the previous managed file in place when the new write cannot be restricted', () => {
@@ -176,5 +197,138 @@ describe('brokerage connection precedence', () => {
     });
     expect(restarted.providerAllowed).toBe(false);
     expect(restarted.credentials).toBeNull();
+  });
+
+  it('requires an explicit test, account choice, and import, and does not call the provider while saving', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'os-connection-flow-'));
+    directories.push(directory);
+    const databasePath = path.join(directory, 'data', 'optionscout.sqlite');
+    const legacyPath = path.join(directory, 'secrets', 'tastytrade.env');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    fs.writeFileSync(
+      legacyPath,
+      'TASTYTRADE_ENVIRONMENT=production\nTASTYTRADE_CLIENT_ID=legacy-client-id\nTASTYTRADE_CLIENT_SECRET=legacy-secret-value\nTASTYTRADE_REFRESH_TOKEN=legacy-refresh-token\n',
+    );
+    const config = parseConfig({
+      NODE_ENV: 'test',
+      PORT: '0',
+      BIND_HOST: '127.0.0.1',
+      DATABASE_PATH: databasePath,
+      DATA_MODE: 'demo',
+      AUTH_MODE: 'local-owner',
+      ENABLE_ORDER_EXECUTION: 'false',
+      TELEMETRY_ENABLED: 'false',
+      STATIC_DIR: '',
+      TASTYTRADE_ENABLE_LIVE: 'true',
+    }, { secretFilePath: legacyPath });
+    const context = await openAppContext(config);
+    databases.push(context.database);
+    setupOwnerPassphrase(context.database.db, 'correct horse battery');
+    const app = createApp(context);
+    const agent = request.agent(app);
+    const loggedIn = await agent.post('/api/session').set('Origin', 'http://127.0.0.1').send({ passphrase: 'correct horse battery' });
+    const calls: string[] = [];
+    const primary = 'ZZQA000111';
+    const other = 'ZZQA000222';
+    const saved = await agent
+      .post('/api/broker/credentials')
+      .set('Origin', 'http://127.0.0.1')
+      .set('X-CSRF-Token', loggedIn.body.csrfToken)
+      .send(managedInput);
+    expect(saved.status).toBe(200);
+    expect(JSON.stringify(saved.body)).not.toContain(managedInput.clientSecret);
+    expect(JSON.stringify(saved.body)).not.toContain(managedInput.refreshToken);
+    expect(context.database.sqlite.prepare('SELECT COUNT(*) AS count FROM broker_accounts').get()).toEqual({ count: 0 });
+    expect(fs.existsSync(managedSecretPath(databasePath))).toBe(true);
+    context.brokerage = {
+      async getJson(requestPath: string) {
+        calls.push(requestPath);
+        if (requestPath === '/customers/me/accounts') {
+          return {
+            data: {
+              items: [
+                { account: { 'account-number': primary, 'account-type-name': 'Individual' } },
+                { account: { 'account-number': other, 'account-type-name': 'IRA' } },
+              ],
+            },
+          };
+        }
+        if (requestPath.endsWith('/positions') || requestPath.endsWith('/transactions')) {
+          return { data: { items: [] }, pagination: { 'page-offset': 0, 'total-pages': 1 } };
+        }
+        return { data: { items: [] } };
+      },
+    };
+    const premature = await agent.post('/api/broker/sync').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(premature.status).toBe(409);
+    expect(calls).toEqual([]);
+    const tested = await agent.post('/api/broker/test-connection').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(tested.status).toBe(200);
+    expect(tested.body.connection.accountChoices).toHaveLength(2);
+    const testedText = JSON.stringify(tested.body);
+    expect(testedText).not.toContain(primary);
+    expect(testedText).not.toContain(other);
+    expect(testedText).not.toContain(managedInput.clientSecret);
+    expect(context.database.sqlite.prepare('SELECT COUNT(*) AS count FROM broker_accounts').get()).toEqual({ count: 0 });
+    const choice = tested.body.connection.accountChoices.find((item: { maskedAccount: string }) => item.maskedAccount.endsWith('0111'));
+    const rejected = tested.body.connection.accountChoices.find((item: { maskedAccount: string }) => item.maskedAccount.endsWith('0222'));
+    const chosen = await agent.post('/api/broker/accounts/choose').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({ choiceId: choice.choiceId });
+    expect(chosen.status).toBe(200);
+    expect(chosen.body.connection.accountSelected).toBe(true);
+    expect(JSON.stringify(chosen.body)).not.toContain(primary);
+    const imported = await agent.post('/api/broker/sync').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(imported.status).toBe(200);
+    expect(calls.some((item) => item.includes(primary))).toBe(true);
+    expect(calls.some((item) => item.includes(other))).toBe(false);
+    expect(context.database.sqlite.prepare('SELECT COUNT(*) AS count FROM broker_accounts').get()).toEqual({ count: 1 });
+    const blocked = await agent.post('/api/broker/accounts/choose').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({ choiceId: rejected.choiceId });
+    expect(blocked.status).toBe(409);
+    expect(context.database.sqlite.prepare('SELECT COUNT(*) AS count FROM broker_accounts').get()).toEqual({ count: 1 });
+    const orders = await agent.post('/api/orders').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(orders.status).toBe(404);
+    const beforeDisconnect = calls.length;
+    const disconnected = await agent.post('/api/broker/disconnect').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(disconnected.status).toBe(200);
+    const afterRestart = await agent.post('/api/broker/test-connection').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(afterRestart.status).toBe(409);
+    expect(calls).toHaveLength(beforeDisconnect);
+    expect(fs.existsSync(legacyPath)).toBe(true);
+    expect(fs.existsSync(managedSecretPath(databasePath))).toBe(false);
+  });
+
+  it('blocks Test Connection when live brokerage access is hard-disabled', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'os-connection-hard-'));
+    directories.push(directory);
+    const databasePath = path.join(directory, 'data', 'optionscout.sqlite');
+    const legacyPath = path.join(directory, 'secrets', 'tastytrade.env');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    fs.writeFileSync(
+      legacyPath,
+      'TASTYTRADE_ENVIRONMENT=sandbox\nTASTYTRADE_CLIENT_ID=managed-client-id\nTASTYTRADE_CLIENT_SECRET=managed-secret-value\nTASTYTRADE_REFRESH_TOKEN=managed-refresh-token\n',
+    );
+    const config = parseConfig({
+      NODE_ENV: 'test',
+      PORT: '0',
+      BIND_HOST: '127.0.0.1',
+      DATABASE_PATH: databasePath,
+      DATA_MODE: 'demo',
+      AUTH_MODE: 'local-owner',
+      ENABLE_ORDER_EXECUTION: 'false',
+      TELEMETRY_ENABLED: 'false',
+      STATIC_DIR: '',
+      TASTYTRADE_ENABLE_LIVE: 'true',
+      TASTYTRADE_DISABLE_LIVE: 'true',
+    }, { secretFilePath: legacyPath });
+    const context = await openAppContext(config);
+    databases.push(context.database);
+    setupOwnerPassphrase(context.database.db, 'correct horse battery');
+    saveManagedCredentials(context.database.db, databasePath, managedInput);
+    const app = createApp(context);
+    const agent = request.agent(app);
+    const loggedIn = await agent.post('/api/session').set('Origin', 'http://127.0.0.1').send({ passphrase: 'correct horse battery' });
+    const tested = await agent.post('/api/broker/test-connection').set('Origin', 'http://127.0.0.1').set('X-CSRF-Token', loggedIn.body.csrfToken).send({});
+    expect(tested.status).toBe(409);
+    expect(tested.body.error).toMatch(/TASTYTRADE_DISABLE_LIVE/);
+    expect(context.brokerage).toBeNull();
   });
 });

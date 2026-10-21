@@ -47,7 +47,7 @@ import {
 import { authorizeSync } from './brokerage/actor.js';
 import { brokerageFailureMessage, ScheduledSyncDisabledError, SyncInputError, TastytradeError } from './brokerage/errors.js';
 import { buildBrokerOverview, listImportedPositions, listImportedTransactions } from './brokerage/status.js';
-import { discoverAccounts, selectBrokerAccount, syncPositions, syncQuotes, syncTransactions } from './brokerage/sync.js';
+import { discoverAccounts, selectAccountNumber, selectBrokerAccount, syncPositions, syncQuotes, syncTransactions } from './brokerage/sync.js';
 import { buildPortfolio, confirmStrategy, deleteStrategy } from './accounting/portfolio.js';
 import type { AppContext } from './context.js';
 import { quoteSnapshots } from './db/schema.js';
@@ -110,12 +110,13 @@ import { runDxlinkDiagnostic } from './marketdata/diagnostic.js';
 import {
   CredentialInputError,
   accountFingerprint,
+  chooseStagedAccount,
   disconnectBroker,
   importNeedsDecision,
   rememberImportFingerprint,
-  rememberPendingFingerprint,
   saveManagedCredentials,
-  singleAccountImport,
+  selectedImportAccount,
+  stageAccountChoices,
   validateCredentialInput,
 } from './brokerage/connection.js';
 import { refreshBrokerConnection } from './context.js';
@@ -218,24 +219,26 @@ function sendKnownError(res: Response, error: unknown): boolean {
   return false;
 }
 
-async function accountNumbers(client: NonNullable<AppContext['brokerage']>): Promise<string[]> {
+async function accountDetails(client: NonNullable<AppContext['brokerage']>): Promise<Array<{ accountNumber: string; accountType: string }>> {
   const body = await client.getJson('/customers/me/accounts');
   const items = body && typeof body === 'object' && Array.isArray((body as { data?: { items?: unknown[] } }).data?.items)
     ? (body as { data: { items: unknown[] } }).data.items
     : [];
-  const numbers: string[] = [];
+  const accounts: Array<{ accountNumber: string; accountType: string }> = [];
   for (const item of items) {
-    const account = item && typeof item === 'object' ? (item as { account?: { 'account-number'?: unknown } }).account : undefined;
-    const number = account?.['account-number'];
-    if (typeof number === 'string' && number.trim()) numbers.push(number.trim());
+    const record = item && typeof item === 'object' ? (item as { account?: { 'account-number'?: unknown; 'account-type-name'?: unknown } }).account : undefined;
+    const number = record?.['account-number'];
+    if (typeof number !== 'string' || !number.trim()) continue;
+    const accountType = typeof record?.['account-type-name'] === 'string' ? record['account-type-name'] : 'Account';
+    accounts.push({ accountNumber: number.trim(), accountType });
   }
-  return numbers;
+  return accounts;
 }
 
 async function runSync(
   context: AppContext,
   session: OwnerSession,
-  body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string }; acknowledgeAccountChange?: 'keep-history' },
+  body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } },
 ): Promise<void> {
   if (context.brokerConnection.hardDisabled) {
     throw new HttpError(409, 'TASTYTRADE_DISABLE_LIVE is on. No brokerage request will be sent.');
@@ -243,23 +246,32 @@ async function runSync(
   if (!context.brokerConnection.providerAllowed || !context.brokerage) {
     throw new HttpError(409, 'Live brokerage access is disabled.');
   }
-  const numbers = await accountNumbers(context.brokerage);
-  let fingerprint: string;
-  try {
-    fingerprint = singleAccountImport(context.database.db, context.brokerConnection.environment, numbers).fingerprint;
-  } catch (error) {
-    rememberPendingFingerprint(context.database.db, accountFingerprint(context.brokerConnection.environment, numbers));
-    throw new HttpError(409, error instanceof Error ? error.message : 'Import was not started.');
+  const selected = selectedImportAccount(context.database.db);
+  if (!selected) {
+    throw new HttpError(409, 'Select one account from the connection test before importing. Nothing was imported.');
+  }
+  const live = await accountDetails(context.brokerage);
+  if (!live.some((account) => account.accountNumber === selected.accountNumber)) {
+    throw new HttpError(409, 'The selected account is not on this connection. Nothing was imported.');
+  }
+  const fingerprint = accountFingerprint(selected.environment, [selected.accountNumber]);
+  if (context.brokerConnection.environment !== selected.environment) {
+    throw new HttpError(409, 'This connection uses a different environment than the selected account. Existing records were not changed. Use a separate Docker data volume.');
   }
   if (importNeedsDecision(context.database.db, fingerprint)) {
-    throw new HttpError(409, 'This grant is for a different account or environment than the imported history. Existing records were not changed or combined. Use a separate Docker data volume for that account.');
+    throw new HttpError(409, 'This account or environment is different from the imported history. Existing records were not changed. Use a separate Docker data volume for that account.');
   }
   rememberImportFingerprint(context.database.db, fingerprint);
   const actor = { type: 'session' as const, sessionId: session.id };
   authorizeSync(actor, context.config.scheduledSyncEnabled);
   const client = context.brokerage;
   try {
-    await discoverAccounts(context.database.db, client, actor, context.config.scheduledSyncEnabled);
+    await discoverAccounts(context.database.db, client, actor, context.config.scheduledSyncEnabled, selected.accountNumber);
+    try {
+      selectAccountNumber(context.database.db, selected.accountNumber);
+    } catch (error) {
+      throw new HttpError(409, error instanceof Error ? error.message : 'The selected account was not stored.');
+    }
     await syncPositions(context.database.db, client, actor, context.config.scheduledSyncEnabled);
     await syncTransactions(context.database.db, client, actor, {
       lookbackDays: context.config.transactionLookbackDays,
@@ -270,10 +282,9 @@ async function runSync(
     context.brokerRuntime.connectedThisProcess = true;
     context.brokerRuntime.lastError = null;
   } catch (error) {
-    if (!(error instanceof SyncInputError)) {
-      context.brokerRuntime.connectedThisProcess = false;
-      context.brokerRuntime.lastError = error instanceof TastytradeError ? brokerageFailureMessage(error.status) : 'The brokerage request failed.';
-    }
+    if (error instanceof HttpError || error instanceof SyncInputError) throw error;
+    context.brokerRuntime.connectedThisProcess = false;
+    context.brokerRuntime.lastError = error instanceof TastytradeError ? brokerageFailureMessage(error.status) : 'The brokerage request failed.';
     throw error;
   }
 }
@@ -432,31 +443,29 @@ export function registerRoutes(app: Express, context: AppContext): void {
       if (!context.brokerConnection.providerAllowed || !context.brokerage) {
         throw new HttpError(409, 'Read-only brokerage access is not armed. Saving credentials does not contact tastytrade by itself.');
       }
-      const numbers = await accountNumbers(context.brokerage);
-      let message = 'Connected. Read-only access was confirmed. Nothing was imported.';
-      let accountChangePending = false;
-      try {
-        singleAccountImport(context.database.db, context.brokerConnection.environment, numbers);
-      } catch (error) {
-        const text = error instanceof Error ? error.message : 'Import is blocked.';
-        if (numbers.length === 0) {
-          context.brokerRuntime.connectedThisProcess = false;
-          context.brokerRuntime.lastError = text;
-          throw new HttpError(502, text);
-        }
-        accountChangePending = true;
-        message = text;
-        rememberPendingFingerprint(context.database.db, accountFingerprint(context.brokerConnection.environment, numbers));
+      const accounts = await accountDetails(context.brokerage);
+      if (accounts.length === 0) {
+        context.brokerRuntime.connectedThisProcess = false;
+        context.brokerRuntime.lastError = 'The brokerage did not confirm an account. Nothing was imported.';
+        throw new HttpError(502, 'The brokerage did not confirm an account. Nothing was imported.');
       }
+      const choices = stageAccountChoices(context.database.db, context.brokerConnection.environment, accounts);
+      const message = choices.length === 1
+        ? 'Connected. Confirm this account, then use Import / Refresh Positions. Nothing was imported.'
+        : 'Connected. Choose one account, then use Import / Refresh Positions. Nothing was imported.';
       context.brokerRuntime.connectedThisProcess = true;
       context.brokerRuntime.lastError = null;
       const body = overview(context, session);
+      const serialized = JSON.stringify({ ...body, connection: { ...body.connection, accountChoices: choices, message } });
+      for (const account of accounts) {
+        if (serialized.includes(account.accountNumber)) throw new HttpError(500, 'Account response was withheld.');
+      }
       res.json({
         ...body,
         connection: {
           ...body.connection,
           state: 'connected',
-          accountChangePending,
+          accountChoices: choices,
           message,
         },
       });
@@ -483,6 +492,30 @@ export function registerRoutes(app: Express, context: AppContext): void {
         res.status(404).json({ error: 'That account is not available.' });
         return;
       }
+      if (error instanceof Error && error.message.includes('separate Docker data volume')) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/accounts/choose', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const choiceId = typeof req.body?.choiceId === 'string' ? req.body.choiceId : '';
+      if (!/^[a-f0-9]{16}$/.test(choiceId)) {
+        res.status(400).json({ error: 'Choose one account from the latest connection test.' });
+        return;
+      }
+      try {
+        chooseStagedAccount(context.database.db, choiceId);
+      } catch (error) {
+        throw new HttpError(409, error instanceof Error ? error.message : 'That account was not selected. Nothing was imported.');
+      }
+      res.json(overview(context, session));
+    } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
   });

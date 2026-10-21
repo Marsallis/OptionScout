@@ -4,16 +4,20 @@ import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Collapse from '@mui/material/Collapse';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { disconnectBroker, fetchPortfolio, saveBrokerCredentials, testBrokerConnection } from '../api/client';
+import { chooseBrokerAccount, disconnectBroker, fetchPortfolio, saveBrokerCredentials, testBrokerConnection } from '../api/client';
 import { useAppState } from '../state/AppState';
 
 export function BrokerPage() {
-  const { status, error, broker, session, signIn, signOut, syncNow, chooseAccount } = useAppState();
+  const { status, error, broker, session, signIn, signOut, syncNow, chooseAccount, applyBroker } = useAppState();
   const [passphrase, setPassphrase] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTone, setNoticeTone] = useState<'info' | 'warning' | 'success'>('info');
@@ -73,7 +77,7 @@ export function BrokerPage() {
       <Alert severity="info" icon={false}>
         {broker.disclaimer} Read-only access only. Order routing stays off. A local file is not encryption, and a Docker data-volume backup can include the credential file.
       </Alert>
-      <ConnectionGuide signedIn={session?.authenticated === true} onNotice={(tone, text) => { setNoticeTone(tone); setNotice(text); }} />
+      <ConnectionGuide signedIn={session?.authenticated === true} onNotice={(tone, text) => { setNoticeTone(tone); setNotice(text); }} onBroker={applyBroker} />
       {notice ? <Alert severity={noticeTone}>{notice}</Alert> : null}
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
         <Typography variant="h6">Owner sign-in</Typography>
@@ -158,7 +162,9 @@ export function BrokerPage() {
         ) : null}
         {broker.accounts.length === 0 ? (
           <Typography variant="body2" sx={{ mt: 1.5 }}>
-            No accounts are shown until you sign in.
+            {session?.authenticated
+              ? 'No brokerage account is imported yet. Choose an account above, then use Import / Refresh Positions.'
+              : 'No accounts are shown until you sign in.'}
           </Typography>
         ) : (
           <TextField
@@ -180,7 +186,7 @@ export function BrokerPage() {
           </TextField>
         )}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
-          <Button variant="contained" disabled={busy || !session?.authenticated} onClick={() => void runSync('recent')}>
+          <Button variant="contained" disabled={busy || !session?.authenticated || broker.connection.accountSelected !== true} onClick={() => void runSync('recent')}>
             Import / Refresh Positions
           </Button>
           <TextField
@@ -190,7 +196,7 @@ export function BrokerPage() {
             onChange={(event) => setBackfillStart(event.target.value)}
             InputLabelProps={{ shrink: true }}
           />
-          <Button variant="outlined" disabled={busy || !session?.authenticated || backfillStart.length === 0} onClick={() => void runSync('backfill')}>
+          <Button variant="outlined" disabled={busy || !session?.authenticated || broker.connection.accountSelected !== true || backfillStart.length === 0} onClick={() => void runSync('backfill')}>
             Backfill from date
           </Button>
         </Stack>
@@ -199,20 +205,33 @@ export function BrokerPage() {
   );
 }
 
-function ConnectionGuide({ signedIn, onNotice }: { signedIn: boolean; onNotice: (tone: 'info' | 'warning' | 'success', text: string) => void }) {
+function ConnectionGuide({
+  signedIn,
+  onNotice,
+  onBroker,
+}: {
+  signedIn: boolean;
+  onNotice: (tone: 'info' | 'warning' | 'success', text: string) => void;
+  onBroker: (next: BrokerOverview) => void;
+}) {
+  const { broker } = useAppState();
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
+  const [choiceId, setChoiceId] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [closed, setClosed] = useState<string[]>([]);
+  const [unresolved, setUnresolved] = useState<string[]>([]);
+  const choices = broker?.connection.accountChoices ?? [];
   return (
     <Paper id="accounting" sx={{ p: { xs: 2, md: 3 } }}>
       <Typography variant="h6">Connect tastytrade</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        tastytrade is optional and read-only. This install keeps one brokerage account. Create a personal OAuth application, then Create Grant with the read scope only. Production and sandbox credentials are not interchangeable. Saving stores the values on this computer and does not import positions or run a search. A different account needs its own Docker data volume. Revoking the grant at tastytrade is a separate step from Disconnect.
+        tastytrade is optional and read-only. Saving credentials does not connect or import. Test Connection lists the accounts on the grant. Confirm one account, or pick one when several are available. Import / Refresh Positions then reads only that account. A different account or environment needs its own Docker data volume. Existing history is not cleared or combined. Revoking the grant at tastytrade is a separate step from Disconnect.
       </Typography>
       {signedIn ? (
-        <Stack spacing={1.25} sx={{ mt: 1.5, maxWidth: 480 }}>
+        <Stack spacing={1.25} sx={{ mt: 1.5, maxWidth: 520 }}>
           <TextField select size="small" label="Environment" value={environment} onChange={(event) => setEnvironment(event.target.value as 'sandbox' | 'production')}>
             <MenuItem value="production">Production</MenuItem>
             <MenuItem value="sandbox">Sandbox</MenuItem>
@@ -226,27 +245,69 @@ function ConnectionGuide({ signedIn, onNotice }: { signedIn: boolean; onNotice: 
                 .then((body) => {
                   setClientSecret('');
                   setRefreshToken('');
+                  onBroker(body);
                   onNotice('success', body.connection.message);
                 })
                 .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Could not save credentials.'));
             }}>Save credentials</Button>
             <Button variant="outlined" onClick={() => {
               void testBrokerConnection()
-                .then((body) => onNotice(body.connection.accountChangePending ? 'warning' : 'success', body.connection.message))
+                .then((body) => {
+                  onBroker(body);
+                  const first = body.connection.accountChoices?.[0]?.choiceId ?? '';
+                  setChoiceId(body.connection.accountChoices?.length === 1 ? first : '');
+                  onNotice('success', body.connection.message);
+                })
                 .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Connection test failed.'));
             }}>Test Connection</Button>
             <Button variant="text" onClick={() => {
               void disconnectBroker()
-                .then((body) => onNotice('info', body.connection.message))
+                .then((body) => {
+                  onBroker(body);
+                  setChoiceId('');
+                  onNotice('info', body.connection.message);
+                })
                 .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'Disconnect failed.'));
             }}>Disconnect</Button>
           </Stack>
+          {choices.length > 0 ? (
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">Choose one account</Typography>
+              <RadioGroup value={choiceId} onChange={(event) => setChoiceId(event.target.value)}>
+                {choices.map((choice) => (
+                  <FormControlLabel
+                    key={choice.choiceId}
+                    value={choice.choiceId}
+                    control={<Radio />}
+                    label={`${choice.accountType} · ${choice.maskedAccount}`}
+                  />
+                ))}
+              </RadioGroup>
+              <Button variant="outlined" disabled={choiceId.length === 0} onClick={() => {
+                void chooseBrokerAccount(choiceId)
+                  .then((body) => {
+                    onBroker(body);
+                    onNotice('success', 'That account is selected. Use Import / Refresh Positions when you want its history. Nothing was imported yet.');
+                  })
+                  .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'That account was not selected.'));
+              }}>Use this account</Button>
+            </Stack>
+          ) : null}
           <Button variant="text" onClick={() => {
+            const next = !historyOpen;
+            setHistoryOpen(next);
+            if (!next) return;
             void fetchPortfolio()
-              .then((portfolio) => setClosed(portfolio.positions.filter((row) => row.direction === 'flat').map((row) => `${row.underlying} ${row.symbol}`)))
+              .then((portfolio) => {
+                setClosed(portfolio.positions.filter((row) => row.direction === 'flat' && row.status !== 'unreconciled').map((row) => `${row.underlying} ${row.symbol}`));
+                setUnresolved(portfolio.positions.filter((row) => row.status === 'unreconciled' || row.status === 'missing-opening').map((row) => `${row.underlying} ${row.symbol}`));
+              })
               .catch((reason: unknown) => onNotice('warning', reason instanceof Error ? reason.message : 'History is unavailable.'));
-          }}>Show accounting history</Button>
-          {closed.length > 0 ? <Typography variant="body2">Closed contracts: {closed.join('; ')}</Typography> : null}
+          }}>{historyOpen ? 'Hide accounting history' : 'Show accounting history'}</Button>
+          <Collapse in={historyOpen}>
+            <Typography variant="body2">Closed contracts: {closed.length > 0 ? closed.join('; ') : 'none in this book'}</Typography>
+            <Typography variant="body2">Unresolved accounting: {unresolved.length > 0 ? unresolved.join('; ') : 'none'}</Typography>
+          </Collapse>
         </Stack>
       ) : (
         <Typography variant="body2" sx={{ mt: 1.5 }}>Sign in before entering brokerage credentials.</Typography>

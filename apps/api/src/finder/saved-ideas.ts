@@ -12,7 +12,7 @@ export class SavedIdeaError extends Error {
 
 const OCC = /^([A-Z]{1,6})\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/;
 
-function parsedContract(value: string, label: string): { symbol: string; root: string; expiration: string; right: 'C' | 'P' } {
+function parsedContract(value: string, label: string): { symbol: string; root: string; expiration: string; right: 'C' | 'P'; strikeCode: number } {
   const symbol = value.trim().toUpperCase();
   const match = OCC.exec(symbol);
   if (!match || /[\r\n\0]/.test(value)) {
@@ -23,13 +23,36 @@ function parsedContract(value: string, label: string): { symbol: string; root: s
   const month = match[3] ?? '';
   const day = match[4] ?? '';
   const right = match[5] === 'P' ? 'P' : 'C';
-  return { symbol, root, expiration: `20${year}-${month}-${day}`, right };
+  return { symbol, root, expiration: `20${year}-${month}-${day}`, right, strikeCode: Number(match[6] ?? '0') };
+}
+
+function describedIdea(longOcc: string, shortOcc: string | null): { kind: 'pmcc-setup' | 'leaps-idea' | 'reviewed-pair'; structureNote: string } {
+  if (!shortOcc) {
+    return {
+      kind: 'leaps-idea',
+      structureNote: 'Hypothetical only. Delta, intrinsic value, and profitability were not evaluated.',
+    };
+  }
+  const long = parsedContract(longOcc, 'Long contract');
+  const short = parsedContract(shortOcc, 'Short contract');
+  if (long.strikeCode < short.strikeCode) {
+    return {
+      kind: 'pmcc-setup',
+      structureNote: 'The long strike is below the short strike. This label is not a delta, intrinsic-value, or profitability check.',
+    };
+  }
+  return {
+    kind: 'reviewed-pair',
+    structureNote: 'The long strike is not below the short strike, so this is not a conventional PMCC. Delta, intrinsic value, and profitability were not evaluated.',
+  };
 }
 
 export function listSavedIdeas(db: AppDatabase) {
-  return db.select().from(savedPmccIdeas).all().map((row) => ({
+  return db.select().from(savedPmccIdeas).all().map((row) => {
+    const described = describedIdea(row.longOcc, row.shortOcc);
+    return {
     id: row.id,
-    kind: row.shortOcc ? 'pmcc-setup' as const : 'leaps-idea' as const,
+    kind: described.kind,
     underlying: row.underlying,
     longOcc: row.longOcc,
     shortOcc: row.shortOcc,
@@ -38,11 +61,13 @@ export function listSavedIdeas(db: AppDatabase) {
     sessionId: row.sessionId,
     quoteAsOf: row.quoteAsOf,
     notes: row.notes,
+    structureNote: described.structureNote,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     hypothetical: true as const,
     notACurrentQuote: true as const,
-  }));
+  };
+  });
 }
 
 export function createSavedIdea(db: AppDatabase, input: {

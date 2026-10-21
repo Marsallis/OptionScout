@@ -263,8 +263,9 @@ function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
     if (short) grouped.add(short.id);
     return { id: strategy.id, underlying: strategy.underlying, long, short };
   });
+  const unresolved = portfolio.data.positions.filter((position) => position.status === 'unreconciled' || position.status === 'missing-opening').length;
   const rest = open.filter((position) => !grouped.has(position.id));
-  const closedCount = portfolio.data.positions.length - open.length;
+  const closedCount = portfolio.data.positions.filter((position) => position.direction === 'flat' && position.status !== 'unreconciled' && position.status !== 'missing-opening').length;
   return (
     <Stack spacing={1.5}>
       {closedCount > 0 ? (
@@ -273,17 +274,16 @@ function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
           <Link to="/broker">Review accounting history</Link>
         </Alert>
       ) : null}
+      {unresolved > 0 ? (
+        <Alert severity="warning">{unresolved} unresolved accounting {unresolved === 1 ? 'item is' : 'items are'} not listed as an open position. Review accounting history on Broker & Data.</Alert>
+      ) : null}
       {open.length === 0 ? (
         <Alert severity="info">
           No open brokerage positions are imported. Connect tastytrade on Broker & Data, then use Import / Refresh Positions. Demo positions stay on the demo portfolio.
         </Alert>
       ) : null}
       {groups.map((group) => (
-        <Paper key={group.id} sx={{ p: 2 }}>
-          <Typography variant="h6">{group.underlying} confirmed PMCC</Typography>
-          {group.long ? <OpenLeg position={group.long} role="Long LEAPS" /> : <Typography variant="body2">Long LEAPS unavailable</Typography>}
-          {group.short ? <OpenLeg position={group.short} role="Short call" /> : <Typography variant="body2">Short call unavailable</Typography>}
-        </Paper>
+        <ConfirmedPmccCard key={group.id} group={group} />
       ))}
       {rest.map((position) => (
         <Paper key={position.id} sx={{ p: 2 }}>
@@ -291,6 +291,28 @@ function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
         </Paper>
       ))}
     </Stack>
+  );
+}
+
+function ConfirmedPmccCard({ group }: { group: { id: string; underlying: string; long: PortfolioPosition | null; short: PortfolioPosition | null } }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="h6">{group.underlying} confirmed PMCC</Typography>
+      <Typography variant="body2" color="text.secondary">One confirmed position. The long LEAPS and short call are not counted twice.</Typography>
+      {group.long ? <OpenLeg position={group.long} role="Long LEAPS" /> : <Typography variant="body2">Long LEAPS unavailable</Typography>}
+      {group.short ? <OpenLeg position={group.short} role="Short call" /> : <Typography variant="body2">Short call unavailable</Typography>}
+      <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => setOpen((value) => !value)}>
+        {open ? 'Hide PMCC details' : 'View PMCC details'}
+      </Button>
+      <Collapse in={open}>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Quote: {group.long ? `${group.long.quoteFreshness.replaceAll('_', ' ')}` : 'Long quote unavailable'}
+          {group.short ? ` · short ${group.short.quoteFreshness.replaceAll('_', ' ')}` : ' · short quote unavailable'}
+        </Typography>
+        <Typography variant="body2">Unrealized uses the imported mark when it is present. A missing quote stays labeled unavailable.</Typography>
+      </Collapse>
+    </Paper>
   );
 }
 
@@ -310,7 +332,7 @@ function OpenLeg({ position, role }: { position: PortfolioPosition; role: string
 }
 
 function SavedIdeasPanel({ signedIn }: { signedIn: boolean }) {
-  const [ideas, setIdeas] = useState<Array<{ id: string; kind: string; underlying: string; longOcc: string; shortOcc: string | null; quoteAsOf: string | null; notes: string }>>([]);
+  const [ideas, setIdeas] = useState<Array<{ id: string; kind: string; underlying: string; longOcc: string; shortOcc: string | null; quoteAsOf: string | null; notes: string; structureNote?: string }>>([]);
   const [bookmarks, setBookmarks] = useState<Array<{ id: string; underlying: string; occSymbol: string; quoteAsOf: string | null }>>([]);
   const [longOcc, setLongOcc] = useState('');
   const [shortOcc, setShortOcc] = useState('');
@@ -337,10 +359,13 @@ function SavedIdeasPanel({ signedIn }: { signedIn: boolean }) {
       ))}
       {ideas.map((row) => (
         <Paper key={row.id} sx={{ p: 2 }}>
-          <Typography variant="subtitle2">{row.kind === 'pmcc-setup' ? 'Saved PMCC Setup' : 'Saved LEAPS Idea'}</Typography>
+          <Typography variant="subtitle2">
+            {row.kind === 'pmcc-setup' ? 'Saved PMCC Setup' : row.kind === 'reviewed-pair' ? 'Saved pair — not a conventional PMCC' : 'Saved LEAPS Idea'}
+          </Typography>
           <Typography variant="body2">{row.underlying}</Typography>
           <Typography variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>Long {row.longOcc}</Typography>
           {row.shortOcc ? <Typography variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>Short {row.shortOcc}</Typography> : null}
+          <Typography variant="body2" color="text.secondary">{row.structureNote}</Typography>
           <Typography variant="body2" color="text.secondary">Snapshot {row.quoteAsOf ?? 'Unavailable'}. {row.notes}</Typography>
         </Paper>
       ))}
@@ -349,12 +374,12 @@ function SavedIdeasPanel({ signedIn }: { signedIn: boolean }) {
         <Stack spacing={1} sx={{ mt: 1 }}>
           <TextField size="small" label="Underlying" value={underlying} onChange={(event) => setUnderlying(event.target.value)} />
           <TextField size="small" label="Long LEAPS contract" value={longOcc} onChange={(event) => setLongOcc(event.target.value)} />
-          <TextField size="small" label="Short call contract, optional" value={shortOcc} onChange={(event) => setShortOcc(event.target.value)} helperText="Leave blank for a Saved LEAPS Idea. A Saved PMCC Setup requires both contracts." />
+          <TextField size="small" label="Short call contract, optional" value={shortOcc} onChange={(event) => setShortOcc(event.target.value)} helperText="Leave blank for a Saved LEAPS Idea. Both contracts are required for a Saved PMCC Setup. A long strike at or above the short strike is not labeled a conventional PMCC. Delta, intrinsic value, and profitability are not checked here." />
           <Button variant="outlined" onClick={() => {
             void createSavedIdea({ underlying, longOcc, shortOcc: shortOcc.trim() || undefined, quoteAsOf: new Date().toISOString() })
               .then((created) => {
                 setIdeas((current) => [created, ...current]);
-                setNotice(created.kind === 'pmcc-setup' ? 'Saved PMCC Setup stored locally.' : 'Saved LEAPS Idea stored locally.');
+                setNotice(created.kind === 'pmcc-setup' ? 'Saved PMCC Setup stored locally.' : created.kind === 'reviewed-pair' ? 'Saved pair stored locally. It is not a conventional PMCC.' : 'Saved LEAPS Idea stored locally.');
               })
               .catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not save the idea.'));
           }}>Save idea</Button>

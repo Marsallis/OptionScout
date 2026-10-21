@@ -284,12 +284,13 @@ export async function deleteStrategyProfile(profileId: string): Promise<void> {
 const savedIdeasSchema = z.object({
   ideas: z.array(z.object({
     id: z.string(),
-    kind: z.enum(['pmcc-setup', 'leaps-idea']),
+    kind: z.enum(['pmcc-setup', 'leaps-idea', 'reviewed-pair']),
     underlying: z.string(),
     longOcc: z.string(),
     shortOcc: z.string().nullable(),
     quoteAsOf: z.string().nullable(),
     notes: z.string(),
+    structureNote: z.string(),
     hypothetical: z.literal(true),
   })),
 });
@@ -332,6 +333,14 @@ export function saveBrokerCredentials(body: {
 
 export function disconnectBroker(): Promise<BrokerOverview> {
   return requestJson('/api/broker/disconnect', brokerOverviewSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
+export function chooseBrokerAccount(choiceId: string): Promise<BrokerOverview> {
+  return requestJson('/api/broker/accounts/choose', brokerOverviewSchema, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ choiceId }),
+  });
 }
 
 export function testBrokerConnection(): Promise<BrokerOverview> {

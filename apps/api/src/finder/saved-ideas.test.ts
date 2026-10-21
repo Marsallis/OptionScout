@@ -41,7 +41,16 @@ describe('saved research ideas', () => {
     expect(leaps.notACurrentQuote).toBe(true);
     const pmcc = createSavedIdea(database, { underlying: 'ZZT', longOcc, shortOcc, quoteAsOf: '2026-10-15T20:00:00.000Z' });
     expect(pmcc.kind).toBe('pmcc-setup');
+    expect(pmcc.structureNote).toMatch(/not a delta, intrinsic-value, or profitability check/);
     expect(pmcc.shortOcc).toBe(shortOcc);
+    const unconventional = createSavedIdea(database, {
+      underlying: 'ZZT',
+      longOcc: 'ZZT   280121C00250000',
+      shortOcc: 'ZZT   261030C00155000',
+    });
+    expect(unconventional.kind).toBe('reviewed-pair');
+    expect(unconventional.structureNote).toMatch(/not a conventional PMCC/);
+    expect(unconventional.structureNote).toMatch(/were not evaluated/);
     deleteSavedIdea(database, pmcc.id);
     expect(listSavedIdeas(database).some((row) => row.id === pmcc.id)).toBe(false);
     expect(listSavedIdeas(database).some((row) => row.id === leaps.id)).toBe(true);

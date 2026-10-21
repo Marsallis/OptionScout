@@ -258,6 +258,18 @@ export const brokerOverviewSchema = z
         hardDisabled: z.boolean().optional(),
         accountChangePending: z.boolean().optional(),
         permissionWarning: z.string().nullable().optional(),
+        accountSelected: z.boolean().optional(),
+        accountChoices: z
+          .array(
+            z
+              .object({
+                choiceId: z.string().min(8),
+                maskedAccount: z.string().min(5),
+                accountType: z.string().min(1),
+              })
+              .strict(),
+          )
+          .optional(),
       })
       .strict(),
     quotes: z

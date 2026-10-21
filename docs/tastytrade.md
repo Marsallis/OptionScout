@@ -46,7 +46,7 @@ The OAuth guide shows position reads at:
 
 `GET /accounts/{account_number}/positions`
 
-Send `Authorization: Bearer <access token>` and the User-Agent. Map the result into the existing `positions` and `option_legs` tables with `is_demo = 0` and `provider = tastytrade`.
+Send `Authorization: Bearer <access token>` and the User-Agent. Import only the account the owner confirmed after Test Connection. A grant that can see several accounts is not rejected. The owner picks one. The browser receives the account type and a masked number, not the full account number. A later import of a different account or the other environment is refused, and the stored transactions stay in place.
 
 Transaction history is an account REST read. Confirm the current path, filters, and pagination in the OpenAPI reference at implementation time, then map fills into the existing `transactions` table. Do not invent pagination behavior.
 

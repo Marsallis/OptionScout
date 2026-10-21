@@ -1,11 +1,11 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { BrokerOverview } from '@optionscout/shared';
 import type { AppConfig } from '../config.js';
-import type { ActiveBrokerConnection } from './connection.js';
+import { readAccountChoices, selectedImportAccount, type ActiveBrokerConnection } from './connection.js';
+import { classifyQuoteFreshness } from './market-hours.js';
 import type { AppDatabase } from '../db/client.js';
 import { readMeta } from '../db/meta.js';
 import { brokerAccounts, brokerPositions, brokerTransactions, quoteSnapshots, syncRuns } from '../db/schema.js';
-import { classifyQuoteFreshness } from './market-hours.js';
 
 export interface BrokerRuntime {
   connectedThisProcess: boolean;
@@ -214,6 +214,8 @@ export function buildBrokerOverview(input: {
       hardDisabled: input.connection?.hardDisabled ?? false,
       accountChangePending: Boolean(readMeta(input.db, 'broker.pending.fingerprint')),
       permissionWarning: input.connection?.permissionWarning ?? null,
+      accountSelected: Boolean(selectedImportAccount(input.db)),
+      accountChoices: input.authenticated ? readAccountChoices(input.db) : [],
     },
     quotes: {
       state: quoteState,
