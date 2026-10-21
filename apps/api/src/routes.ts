@@ -106,6 +106,17 @@ import {
   setDefaultStrategyProfile,
 } from './strategy/profiles.js';
 import { runDxlinkDiagnostic } from './marketdata/diagnostic.js';
+import {
+  CredentialInputError,
+  accountFingerprint,
+  disconnectBroker,
+  importNeedsDecision,
+  rememberImportFingerprint,
+  rememberPendingFingerprint,
+  saveManagedCredentials,
+  validateCredentialInput,
+} from './brokerage/connection.js';
+import { refreshBrokerConnection } from './context.js';
 import { openLiveDxlinkSocket } from './marketdata/live-socket.js';
 import type { SettingsUpdate } from '@optionscout/shared';
 import { ZodError } from 'zod';
@@ -150,6 +161,7 @@ function overview(context: AppContext, session: OwnerSession | null) {
       authenticated: Boolean(session),
       ownerConfigured: ownerIsConfigured(context.database.db),
       portfolioView: settings.portfolioView,
+      connection: context.brokerConnection,
     }),
   );
 }
@@ -164,6 +176,10 @@ function selectedAccountId(context: AppContext): string {
 }
 
 function sendKnownError(res: Response, error: unknown): boolean {
+  if (error instanceof CredentialInputError) {
+    res.status(400).json({ error: error.message });
+    return true;
+  }
   if (error instanceof HttpError) {
     res.status(error.status).json({ error: error.message });
     return true;
@@ -196,10 +212,37 @@ function sendKnownError(res: Response, error: unknown): boolean {
   return false;
 }
 
-async function runSync(context: AppContext, session: OwnerSession, body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } }): Promise<void> {
-  if (!context.config.liveEnabled || !context.brokerage) {
+async function accountNumbers(client: NonNullable<AppContext['brokerage']>): Promise<string[]> {
+  const body = await client.getJson('/customers/me/accounts');
+  const items = body && typeof body === 'object' && Array.isArray((body as { data?: { items?: unknown[] } }).data?.items)
+    ? (body as { data: { items: unknown[] } }).data.items
+    : [];
+  const numbers: string[] = [];
+  for (const item of items) {
+    const account = item && typeof item === 'object' ? (item as { account?: { 'account-number'?: unknown } }).account : undefined;
+    const number = account?.['account-number'];
+    if (typeof number === 'string' && number.trim()) numbers.push(number.trim());
+  }
+  return numbers;
+}
+
+async function runSync(
+  context: AppContext,
+  session: OwnerSession,
+  body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string }; acknowledgeAccountChange?: 'keep-history' },
+): Promise<void> {
+  if (context.brokerConnection.hardDisabled) {
+    throw new HttpError(409, 'TASTYTRADE_DISABLE_LIVE is on. No brokerage request will be sent.');
+  }
+  if (!context.brokerConnection.providerAllowed || !context.brokerage) {
     throw new HttpError(409, 'Live brokerage access is disabled.');
   }
+  const fingerprint = accountFingerprint(context.brokerConnection.environment, await accountNumbers(context.brokerage));
+  if (importNeedsDecision(context.database.db, fingerprint) && body.acknowledgeAccountChange !== 'keep-history') {
+    rememberPendingFingerprint(context.database.db, fingerprint);
+    throw new HttpError(409, 'This connection is for a different brokerage account or environment. Existing history was kept. Import again only after choosing to keep that history.');
+  }
+  rememberImportFingerprint(context.database.db, fingerprint);
   const actor = { type: 'session' as const, sessionId: session.id };
   authorizeSync(actor, context.config.scheduledSyncEnabled);
   const client = context.brokerage;
@@ -323,6 +366,82 @@ export function registerRoutes(app: Express, context: AppContext): void {
       }
       await runSync(context, session, parsed.data);
       res.json(overview(context, session));
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/credentials', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const saved = saveManagedCredentials(context.database.db, context.config.databasePath, validateCredentialInput(req.body ?? {}));
+      const active = refreshBrokerConnection(context);
+      active.permissionWarning = saved.permissionWarning;
+      const body = overview(context, session);
+      const serialized = JSON.stringify(body);
+      for (const secret of [req.body?.clientSecret, req.body?.refreshToken, req.body?.clientId]) {
+        if (typeof secret === 'string' && secret && serialized.includes(secret)) {
+          throw new HttpError(500, 'Credential response was withheld.');
+        }
+      }
+      res.json({ ...body, connection: { ...body.connection, permissionWarning: saved.permissionWarning } });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/disconnect', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      disconnectBroker(context.database.db, context.config.databasePath);
+      refreshBrokerConnection(context);
+      const body = overview(context, session);
+      res.json({
+        ...body,
+        connection: {
+          ...body.connection,
+          message: `${body.connection.message} Revoking the grant at tastytrade is a separate action.`,
+        },
+      });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/test-connection', async (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      if (context.brokerConnection.hardDisabled) {
+        throw new HttpError(409, 'TASTYTRADE_DISABLE_LIVE is on. Test Connection will not contact tastytrade.');
+      }
+      if (!context.brokerConnection.providerAllowed || !context.brokerage) {
+        throw new HttpError(409, 'Read-only brokerage access is not armed. Saving credentials does not contact tastytrade by itself.');
+      }
+      const numbers = await accountNumbers(context.brokerage);
+      if (numbers.length === 0) {
+        context.brokerRuntime.connectedThisProcess = false;
+        context.brokerRuntime.lastError = 'The brokerage did not confirm an account.';
+        throw new HttpError(502, 'The brokerage did not confirm an account.');
+      }
+      const fingerprint = accountFingerprint(context.brokerConnection.environment, numbers);
+      rememberPendingFingerprint(context.database.db, fingerprint);
+      context.brokerRuntime.connectedThisProcess = true;
+      context.brokerRuntime.lastError = null;
+      const body = overview(context, session);
+      res.json({
+        ...body,
+        connection: {
+          ...body.connection,
+          state: 'connected',
+          accountChangePending: importNeedsDecision(context.database.db, fingerprint),
+          message: importNeedsDecision(context.database.db, fingerprint)
+            ? 'Connected. This grant sees a different account or environment than the imported history. Nothing was imported.'
+            : 'Connected. Read-only access was confirmed. Nothing was imported.',
+        },
+      });
     } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }

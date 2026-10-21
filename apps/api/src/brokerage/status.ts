@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { BrokerOverview } from '@optionscout/shared';
 import type { AppConfig } from '../config.js';
+import type { ActiveBrokerConnection } from './connection.js';
 import type { AppDatabase } from '../db/client.js';
 import { readMeta } from '../db/meta.js';
 import { brokerAccounts, brokerPositions, brokerTransactions, quoteSnapshots, syncRuns } from '../db/schema.js';
@@ -92,6 +93,7 @@ export function buildBrokerOverview(input: {
   authenticated: boolean;
   ownerConfigured: boolean;
   portfolioView: 'demo' | 'brokerage';
+  connection?: ActiveBrokerConnection;
   now?: Date;
 }): BrokerOverview {
   const now = input.now ?? new Date();
@@ -115,7 +117,13 @@ export function buildBrokerOverview(input: {
 
   let connectionState: BrokerOverview['connection']['state'] = 'not_configured';
   let connectionMessage = 'No brokerage secret file is configured. Live access stays off.';
-  if (!input.config.liveEnabled && input.config.secretFileComplete) {
+  if (input.connection?.hardDisabled) {
+    connectionState = 'disabled';
+    connectionMessage = 'TASTYTRADE_DISABLE_LIVE is on. Test Connection, import, and research calls to tastytrade are blocked.';
+  } else if (input.connection?.mode === 'disconnected') {
+    connectionState = 'disconnected';
+    connectionMessage = 'This install is disconnected. A saved legacy secret file will not be used until you connect again. Revoking the grant at tastytrade is a separate step.';
+  } else if (!input.config.liveEnabled && input.config.secretFileComplete && input.connection?.mode !== 'managed') {
     connectionState = 'disabled';
     connectionMessage = 'A secret file is present, and live access is still disabled.';
   } else if (input.config.liveEnabled && input.runtime.lastError && !input.runtime.connectedThisProcess) {
@@ -195,12 +203,17 @@ export function buildBrokerOverview(input: {
     disclaimer: 'Brokerage data is separate from the synthetic demo book. This phase does not calculate cost basis or realized P/L.',
     connection: {
       state: connectionState,
-      environment: input.config.tastytradeEnvironment,
+      environment: input.connection && input.connection.environment !== 'unset' ? input.connection.environment : input.config.tastytradeEnvironment,
       readOnly: true,
       liveEnabled: input.config.liveEnabled,
-      secretFilePresent: input.config.secretFileComplete,
+      secretFilePresent: input.connection ? input.connection.source !== 'none' : input.config.secretFileComplete,
       lastSuccessAt: readMeta(input.db, 'broker_last_success_at'),
       message: connectionMessage,
+      connectionMode: input.connection?.mode,
+      providerAllowed: input.connection?.providerAllowed ?? false,
+      hardDisabled: input.connection?.hardDisabled ?? false,
+      accountChangePending: Boolean(readMeta(input.db, 'broker.pending.fingerprint')),
+      permissionWarning: input.connection?.permissionWarning ?? null,
     },
     quotes: {
       state: quoteState,
