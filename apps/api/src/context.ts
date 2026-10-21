@@ -1,5 +1,6 @@
 import type { AppConfig } from './config.js';
 import { resolveActiveConnection, type ActiveBrokerConnection } from './brokerage/connection.js';
+import { createAcceptanceFixture } from './brokerage/acceptance-fixture.js';
 import { brokerageBaseUrl, TastytradeClient, type BrokerageReadClient } from './brokerage/client.js';
 import type { BrokerRuntime } from './brokerage/status.js';
 import { openDatabase, type OpenedDatabase } from './db/client.js';
@@ -67,10 +68,12 @@ export function refreshBrokerConnection(context: AppContext): ActiveBrokerConnec
   context.brokerConnection = active;
   context.brokerage =
     active.providerAllowed && active.credentials && active.environment !== 'unset'
-      ? new TastytradeClient({
-          baseUrl: brokerageBaseUrl(active.environment),
-          credentials: active.credentials,
-        })
+      ? context.config.acceptanceFixture
+        ? createAcceptanceFixture()
+        : new TastytradeClient({
+            baseUrl: brokerageBaseUrl(active.environment),
+            credentials: active.credentials,
+          })
       : null;
   if (!context.brokerage) {
     context.brokerRuntime.connectedThisProcess = false;

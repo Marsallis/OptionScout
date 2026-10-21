@@ -450,9 +450,10 @@ export function registerRoutes(app: Express, context: AppContext): void {
         throw new HttpError(502, 'The brokerage did not confirm an account. Nothing was imported.');
       }
       const choices = stageAccountChoices(context.database.db, context.brokerConnection.environment, accounts);
-      const message = choices.length === 1
+      const fixtureNote = context.config.acceptanceFixture ? ' Fictional local test. tastytrade was not contacted.' : '';
+      const message = (choices.length === 1
         ? 'Connected. Confirm this account, then use Import / Refresh Positions. Nothing was imported.'
-        : 'Connected. Choose one account, then use Import / Refresh Positions. Nothing was imported.';
+        : 'Connected. Choose one account, then use Import / Refresh Positions. Nothing was imported.') + fixtureNote;
       context.brokerRuntime.connectedThisProcess = true;
       context.brokerRuntime.lastError = null;
       const body = overview(context, session);
