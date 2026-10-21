@@ -69,6 +69,14 @@ describe('stale confirmed short display', () => {
     const expiration = buildSnapshot(portfolio, '2026-10-21').find((card) => card.id === 'expiration');
     expect(expiration?.detail).toContain('2026-11-06');
     expect(expiration?.detail).not.toContain('2026-10-30');
+    const active = buildSnapshot(portfolio, '2026-10-21').find((card) => card.id === 'strategies');
+    expect(active?.value).toBe('0');
+    expect(active?.detail).toMatch(/not counted/i);
+    const openPair = {
+      ...portfolio,
+      positions: positions.map((position) => position.symbol === closedShort ? { ...position, direction: 'short' as const, openQuantity: '1' } : position),
+    } as unknown as Portfolio;
+    expect(buildSnapshot(openPair, '2026-10-21').find((card) => card.id === 'strategies')?.value).toBe('1');
     render(
       <MemoryRouter>
         <OpenPositionsTable portfolio={portfolio} />
