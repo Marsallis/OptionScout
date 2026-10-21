@@ -110,6 +110,7 @@ import { runDxlinkDiagnostic } from './marketdata/diagnostic.js';
 import {
   CredentialInputError,
   accountFingerprint,
+  assertHistoryMatchesAccount,
   chooseStagedAccount,
   disconnectBroker,
   importNeedsDecision,
@@ -257,6 +258,11 @@ async function runSync(
   const fingerprint = accountFingerprint(selected.environment, [selected.accountNumber]);
   if (context.brokerConnection.environment !== selected.environment) {
     throw new HttpError(409, 'This connection uses a different environment than the selected account. Existing records were not changed. Use a separate Docker data volume.');
+  }
+  try {
+    assertHistoryMatchesAccount(context.database.db, selected.accountNumber);
+  } catch (error) {
+    throw new HttpError(409, error instanceof Error ? error.message : 'Existing brokerage history was left unchanged.');
   }
   if (importNeedsDecision(context.database.db, fingerprint)) {
     throw new HttpError(409, 'This account or environment is different from the imported history. Existing records were not changed. Use a separate Docker data volume for that account.');

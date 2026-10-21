@@ -21,6 +21,7 @@ import Typography from '@mui/material/Typography';
 import { confirmPortfolioStrategy, createSavedIdea, deletePortfolioStrategy, fetchFinderBookmarks, fetchPortfolio, fetchSavedIdeas } from '../api/client';
 import { AttentionList, OpenPositionsTable, PortfolioHeader, SnapshotGrid } from '../components/overview/PortfolioDashboard';
 import { calendarDaysUntil, localDateIso } from '../components/overview/overviewModel';
+import { confirmedShortLeg } from '../components/overview/confirmedShort';
 import { ResearchPanel } from '../components/overview/ResearchPanel';
 import { formatDate, formatMoney, formatSnapshot } from '../lib/format';
 import { useAppState } from '../state/AppState';
@@ -256,12 +257,12 @@ function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
   const open = portfolio.data.positions.filter((position) => position.direction !== 'flat');
   const grouped = new Set<string>();
   const groups = portfolio.data.strategies.map((strategy) => {
+    const leg = confirmedShortLeg(strategy.performance.shortSymbols, portfolio.data.positions);
     const long = open.find((position) => position.symbol === strategy.longSymbol) ?? null;
-    const shortSymbol = strategy.performance.shortSymbols[0] ?? null;
-    const short = shortSymbol ? open.find((position) => position.symbol === shortSymbol) ?? null : null;
+    const short = leg.activeSymbol ? open.find((position) => position.symbol === leg.activeSymbol) ?? null : null;
     if (long) grouped.add(long.id);
     if (short) grouped.add(short.id);
-    return { id: strategy.id, underlying: strategy.underlying, long, short };
+    return { id: strategy.id, underlying: strategy.underlying, long, short, closedShort: leg.closed };
   });
   const unresolved = portfolio.data.positions.filter((position) => position.status === 'unreconciled' || position.status === 'missing-opening').length;
   const rest = open.filter((position) => !grouped.has(position.id));
@@ -294,14 +295,16 @@ function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
   );
 }
 
-function ConfirmedPmccCard({ group }: { group: { id: string; underlying: string; long: PortfolioPosition | null; short: PortfolioPosition | null } }) {
+function ConfirmedPmccCard({ group }: { group: { id: string; underlying: string; long: PortfolioPosition | null; short: PortfolioPosition | null; closedShort: boolean } }) {
   const [open, setOpen] = useState(false);
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="h6">{group.underlying} confirmed PMCC</Typography>
       <Typography variant="body2" color="text.secondary">One confirmed position. The long LEAPS and short call are not counted twice.</Typography>
       {group.long ? <OpenLeg position={group.long} role="Long LEAPS" /> : <Typography variant="body2">Long LEAPS unavailable</Typography>}
-      {group.short ? <OpenLeg position={group.short} role="Short call" /> : <Typography variant="body2">Short call unavailable</Typography>}
+      {group.short ? <OpenLeg position={group.short} role="Short call" /> : group.closedShort ? (
+        <Typography variant="body2" sx={{ mt: 1 }}>The confirmed short call is closed. It stays in accounting history and was not replaced automatically.</Typography>
+      ) : <Typography variant="body2">Short call unavailable</Typography>}
       <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => setOpen((value) => !value)}>
         {open ? 'Hide PMCC details' : 'View PMCC details'}
       </Button>
@@ -627,8 +630,8 @@ function StrategyCard({
   const performance = strategy.performance;
   const [showCalc, setShowCalc] = useState(false);
   const long = positions.find((row) => row.symbol === strategy.longSymbol);
-  const shortSymbol = performance.shortSymbols[0] ?? null;
-  const short = shortSymbol ? positions.find((row) => row.symbol === shortSymbol) : null;
+  const leg = confirmedShortLeg(strategy.performance.shortSymbols, positions);
+  const short = leg.activeSymbol ? positions.find((row) => row.symbol === leg.activeSymbol) ?? null : null;
   const shortPnl =
     performance.unrealized != null && performance.longUnrealized != null
       ? (Number(performance.unrealized) - Number(performance.longUnrealized)).toFixed(2)
@@ -645,7 +648,13 @@ function StrategyCard({
       </Typography>
       <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, mt: 1.5 }}>
         <LegPanel title="Long LEAPS" position={long} pnl={performance.longUnrealized} fallback={strategy.longSymbol} showDays />
-        <LegPanel title="Short call" position={short} pnl={shortPnl} fallback={shortSymbol ?? 'No open short linked'} showDays />
+        {short ? (
+          <LegPanel title="Short call" position={short} pnl={shortPnl} fallback="No open short linked" showDays />
+        ) : leg.closed ? (
+          <Alert severity="info" icon={false}>The confirmed short call is closed. It stays in accounting history and was not replaced automatically.</Alert>
+        ) : (
+          <LegPanel title="Short call" position={null} pnl={null} fallback="No open short linked" showDays />
+        )}
       </Box>
       {performance.combined != null ? (
         <Typography variant="h6" sx={{ mt: 1.75, color: !performance.complete || !quotesCurrent ? 'warning.main' : 'text.primary' }}>

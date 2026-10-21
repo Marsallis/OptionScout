@@ -323,7 +323,7 @@ export function parseConfig(
     staticDir,
     liveEnabled,
     hardDisabled: parsed.data.TASTYTRADE_DISABLE_LIVE === 'true',
-    acceptanceFixture: parsed.data.TASTYTRADE_ACCEPTANCE_FIXTURE === 'true',
+    acceptanceFixture: parsed.data.NODE_ENV !== 'production' && parsed.data.TASTYTRADE_ACCEPTANCE_FIXTURE === 'true',
     dxlinkLiveDiagnostic: parsed.data.DXLINK_LIVE_DIAGNOSTIC === 'true',
     finderLiveScan: parsed.data.FINDER_LIVE_SCAN === 'true',
     smartScanLive: parsed.data.SMART_SCAN_LIVE === 'true',

@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import type { AppDatabase } from '../db/client.js';
 import { readMeta, writeMeta } from '../db/meta.js';
+import { brokerAccounts, brokerTransactions } from '../db/schema.js';
 import type { TastytradeCredentials } from '../config.js';
 
 export const CONNECTION_MODE_KEY = 'broker.connection.mode';
@@ -239,6 +241,7 @@ export function chooseStagedAccount(db: AppDatabase, choiceId: string): { finger
     throw new Error('Choose an account from the latest connection test. Nothing was imported.');
   }
   const fingerprint = accountFingerprint(staged.environment, [staged.accountNumber]);
+  assertHistoryMatchesAccount(db, staged.accountNumber);
   if (importNeedsDecision(db, fingerprint)) {
     rememberPendingFingerprint(db, fingerprint);
     throw new Error('This account or environment is different from the imported history. Existing records were not changed. Use a separate Docker data volume for that account.');
@@ -253,6 +256,21 @@ export function selectedImportAccount(db: AppDatabase): { accountNumber: string;
   const environment = readMeta(db, 'broker.selected.environment');
   if (!accountNumber || (environment !== 'sandbox' && environment !== 'production')) return null;
   return { accountNumber, environment };
+}
+
+export function historyAccountNumbers(db: AppDatabase): string[] {
+  const rows = db
+    .select({ accountNumber: brokerAccounts.accountNumber })
+    .from(brokerTransactions)
+    .innerJoin(brokerAccounts, eq(brokerTransactions.brokerAccountId, brokerAccounts.id))
+    .all();
+  return [...new Set(rows.map((row) => row.accountNumber.trim()).filter((value) => value.length > 0))].sort();
+}
+
+export function assertHistoryMatchesAccount(db: AppDatabase, accountNumber: string): void {
+  const history = historyAccountNumbers(db);
+  if (history.length === 0 || (history.length === 1 && history[0] === accountNumber)) return;
+  throw new Error('This installation already has brokerage history for another account. Existing records were not changed or reassigned. Use a separate Docker data volume for a different account.');
 }
 
 export function importNeedsDecision(db: AppDatabase, nextFingerprint: string): boolean {

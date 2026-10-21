@@ -10,7 +10,7 @@ import { openAppContext } from '../context.js';
 import { openDatabase, type OpenedDatabase } from '../db/client.js';
 import { applyMigrations, migrationsDirectory } from '../db/migrate.js';
 import { brokerAccounts, brokerTransactions } from '../db/schema.js';
-import { readConnectionMode } from './connection.js';
+import { readConnectionMode, saveManagedCredentials } from './connection.js';
 
 const directories: string[] = [];
 const databases: OpenedDatabase[] = [];
@@ -171,5 +171,48 @@ describe('acceptance fixture and legacy upgrade', () => {
     expect(readConnectionMode(context.database.db)).toBe('legacy');
     expect(context.brokerConnection).toMatchObject({ mode: 'legacy', source: 'legacy', providerAllowed: true, hardDisabled: false });
     expect(context.database.sqlite.prepare("SELECT value FROM app_meta WHERE key = 'broker.connection.mode'").get()).toBeUndefined();
+  });
+
+  it('does not activate the fictional brokerage fixture in production', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'os-fixture-prod-'));
+    directories.push(directory);
+    const databasePath = path.join(directory, 'data', 'optionscout.sqlite');
+    const secretPath = path.join(directory, 'missing.env');
+    const base = {
+      PORT: '3224',
+      BIND_HOST: '127.0.0.1',
+      DATABASE_PATH: databasePath,
+      DATA_MODE: 'demo',
+      AUTH_MODE: 'local-owner',
+      ENABLE_ORDER_EXECUTION: 'false',
+      TELEMETRY_ENABLED: 'false',
+      STATIC_DIR: '',
+      TASTYTRADE_ACCEPTANCE_FIXTURE: 'true',
+    };
+    const prepared = await openAppContext(parseConfig({ ...base, NODE_ENV: 'test' }, { secretFilePath: secretPath }));
+    saveManagedCredentials(prepared.database.db, databasePath, {
+      environment: 'production',
+      clientId: 'fixture-client-id',
+      clientSecret: 'fixture-secret-value',
+      refreshToken: 'fixture-refresh-token',
+    });
+    prepared.close();
+    const calls: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL) => {
+      calls.push(String(input));
+      throw new Error('network was called');
+    }) as typeof fetch;
+    try {
+      const config = parseConfig({ ...base, NODE_ENV: 'production' }, { secretFilePath: secretPath });
+      expect(config.acceptanceFixture).toBe(false);
+      const context = await openAppContext(config);
+      databases.push(context.database);
+      expect(context.brokerage?.constructor.name).toBe('TastytradeClient');
+      expect(calls).toEqual([]);
+      expect(context.database.sqlite.prepare('SELECT COUNT(*) AS count FROM broker_transactions').get()).toEqual({ count: 0 });
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

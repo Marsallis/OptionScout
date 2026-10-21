@@ -9,6 +9,7 @@ import { parseConfig } from '../config.js';
 import { openAppContext } from '../context.js';
 import { openDatabase, type OpenedDatabase } from '../db/client.js';
 import { applyMigrations, migrationsDirectory } from '../db/migrate.js';
+import { brokerAccounts, brokerTransactions } from '../db/schema.js';
 import {
   CredentialInputError,
   accountFingerprint,
@@ -123,6 +124,54 @@ describe('brokerage connection precedence', () => {
     expect(selectedImportAccount(db)).toEqual({ accountNumber: 'FICTIONAL1', environment: 'production' });
     expect(importNeedsDecision(db, accountFingerprint('sandbox', ['FICTIONAL1']))).toBe(true);
     expect(importNeedsDecision(db, accountFingerprint('production', ['FICTIONAL1']))).toBe(false);
+  });
+
+  it('does not attach existing brokerage history to a different account', () => {
+    const { db } = layout();
+    const accountId = 'acct-history';
+    db.insert(brokerAccounts).values({
+      id: accountId,
+      provider: 'tastytrade',
+      accountNumber: 'ZZQA000111',
+      accountType: 'Individual',
+      authority: 'owner',
+      maskedLabel: '••••0111',
+      selected: true,
+      transactionHistoryStatus: 'complete',
+      historyCoverageStart: null,
+      historyCoverageEnd: null,
+      discoveredAt: '2026-10-15T20:00:00.000Z',
+    }).run();
+    db.insert(brokerTransactions).values({
+      id: 'tx-history',
+      brokerAccountId: accountId,
+      providerTransactionId: 'keep-history',
+      symbol: 'CVX   280121C00155000',
+      instrumentType: 'Equity Option',
+      action: 'Buy to Open',
+      quantity: '1',
+      price: '20',
+      executedAt: '2026-09-08T14:58:45.000Z',
+      grossValue: '2000.00',
+      valueEffect: 'Debit',
+      commission: '0.00',
+      feesJson: '{}',
+      transactionType: 'Trade',
+      transactionSubtype: 'Buy to Open',
+      classification: 'trade',
+      rawJson: '{}',
+    }).run();
+    const choices = stageAccountChoices(db, 'production', [
+      { accountNumber: 'ZZQA000111', accountType: 'Individual' },
+      { accountNumber: 'ZZQA000222', accountType: 'IRA' },
+    ]);
+    const other = choices.find((choice) => choice.maskedAccount.endsWith('0222'));
+    const same = choices.find((choice) => choice.maskedAccount.endsWith('0111'));
+    expect(() => chooseStagedAccount(db, other?.choiceId ?? '')).toThrow(/another account/);
+    expect(selectedImportAccount(db)).toBeNull();
+    expect(db.select().from(brokerTransactions).all()).toHaveLength(1);
+    expect(() => chooseStagedAccount(db, same?.choiceId ?? '')).not.toThrow();
+    expect(selectedImportAccount(db)?.accountNumber).toBe('ZZQA000111');
   });
 
   it('leaves the previous managed file in place when the new write cannot be restricted', () => {

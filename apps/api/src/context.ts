@@ -66,9 +66,10 @@ export function refreshBrokerConnection(context: AppContext): ActiveBrokerConnec
     hardDisabled: context.config.hardDisabled,
   });
   context.brokerConnection = active;
+  const useFixture = context.config.acceptanceFixture && context.config.nodeEnv !== 'production';
   context.brokerage =
     active.providerAllowed && active.credentials && active.environment !== 'unset'
-      ? context.config.acceptanceFixture
+      ? useFixture
         ? createAcceptanceFixture()
         : new TastytradeClient({
             baseUrl: brokerageBaseUrl(active.environment),
