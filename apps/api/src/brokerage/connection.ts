@@ -192,6 +192,21 @@ export function accountFingerprint(environment: string, accountNumbers: string[]
   return createHash('sha256').update(`${environment}\n${names.join('\n')}`).digest('hex');
 }
 
+export function singleAccountImport(db: AppDatabase, environment: string, accountNumbers: string[]): { fingerprint: string } {
+  if (accountNumbers.length === 0) {
+    throw new Error('The brokerage did not confirm an account. Nothing was imported.');
+  }
+  if (accountNumbers.length > 1) {
+    throw new Error('This install keeps one brokerage account. The grant can see more than one account, so nothing was imported. Use a separate OptionScout data volume for another account.');
+  }
+  const fingerprint = accountFingerprint(environment, accountNumbers);
+  if (importNeedsDecision(db, fingerprint)) {
+    rememberPendingFingerprint(db, fingerprint);
+    throw new Error('This grant is for a different account or environment than the imported history. Existing records were not changed or combined. Use a separate Docker data volume for that account.');
+  }
+  return { fingerprint };
+}
+
 export function importNeedsDecision(db: AppDatabase, nextFingerprint: string): boolean {
   const current = readMeta(db, IMPORT_FINGERPRINT_KEY);
   return Boolean(current) && current !== nextFingerprint;

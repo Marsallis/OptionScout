@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseConfig } from './config.js';
+import { openDatabase } from './db/client.js';
+import { applyMigrations, migrationsDirectory } from './db/migrate.js';
 import { startServer, type RunningServer } from './server.js';
 
 const directories: string[] = [];
@@ -69,6 +72,37 @@ describe('persistence across restart', () => {
       expect(positions.count).toBe(4);
     } finally {
       await second.close();
+    }
+  });
+
+  it('upgrades a v0.2.1 database without removing an existing brokerage row', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'optionscout-upgrade-'));
+    directories.push(directory);
+    const databasePath = path.join(directory, 'optionscout.sqlite');
+    const sqlite = new Database(databasePath);
+    const migrationsDir = migrationsDirectory();
+    sqlite.exec(`CREATE TABLE schema_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TEXT NOT NULL)`);
+    for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith('.sql') && name < '0015').sort()) {
+      sqlite.exec(fs.readFileSync(path.join(migrationsDir, file), 'utf8'));
+      sqlite.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(file, '2026-10-20T00:00:00.000Z');
+    }
+    sqlite.prepare(`INSERT INTO broker_accounts (
+      id, provider, account_number, account_type, authority, masked_label, selected, transaction_history_status, discovered_at
+    ) VALUES ('acct', 'tastytrade', 'FICTIONAL', 'Individual', 'owner', '••••ONAL', 1, 'not_imported', '2026-10-20T00:00:00.000Z')`).run();
+    sqlite.prepare(`INSERT INTO broker_transactions (
+      id, broker_account_id, provider_transaction_id, symbol, instrument_type, action, quantity, price, executed_at,
+      gross_value, value_effect, commission, fees_json, transaction_type, transaction_subtype, classification, raw_json
+    ) VALUES ('tx1', 'acct', 'p1', 'ZZT', 'Equity Option', 'Buy to Open', '1', '1', '2026-01-01T00:00:00.000Z', '1', 'Debit', '0', '{}', 'Trade', 'Buy to Open', 'trade', '{}')`).run();
+    sqlite.close();
+    const opened = openDatabase(databasePath);
+    try {
+      const applied = applyMigrations(opened.sqlite, migrationsDirectory());
+      expect(applied).toEqual(['0015_saved_pmcc_ideas.sql']);
+      const kept = opened.sqlite.prepare('SELECT id FROM broker_transactions WHERE id = ?').get('tx1') as { id: string };
+      expect(kept.id).toBe('tx1');
+      expect(opened.sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'saved_pmcc_ideas'`).get()).toBeTruthy();
+    } finally {
+      opened.close();
     }
   });
 });

@@ -19,6 +19,7 @@ import {
   rememberImportFingerprint,
   resolveActiveConnection,
   saveManagedCredentials,
+  singleAccountImport,
   validateCredentialInput,
 } from './connection.js';
 
@@ -98,6 +99,9 @@ describe('brokerage connection precedence', () => {
     expect(importNeedsDecision(db, accountFingerprint('production', ['AAA']))).toBe(false);
     expect(importNeedsDecision(db, accountFingerprint('sandbox', ['AAA']))).toBe(true);
     expect(importNeedsDecision(db, accountFingerprint('production', ['BBB']))).toBe(true);
+    expect(() => singleAccountImport(db, 'production', ['AAA', 'BBB'])).toThrow(/one brokerage account/);
+    expect(() => singleAccountImport(db, 'sandbox', ['AAA'])).toThrow(/different account or environment/);
+    expect(singleAccountImport(db, 'production', ['AAA']).fingerprint).toBe(accountFingerprint('production', ['AAA']));
   });
 
   it('leaves the previous managed file in place when the new write cannot be restricted', () => {

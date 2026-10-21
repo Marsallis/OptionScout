@@ -209,7 +209,7 @@ function ConnectionGuide({ signedIn, onNotice }: { signedIn: boolean; onNotice: 
     <Paper id="accounting" sx={{ p: { xs: 2, md: 3 } }}>
       <Typography variant="h6">Connect tastytrade</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        tastytrade is optional and read-only. Create a personal OAuth application, then Create Grant with the read scope only. Production and sandbox credentials are not interchangeable. Saving stores the values on this computer and does not import positions or run a search. Revoking the grant at tastytrade is a separate step from Disconnect.
+        tastytrade is optional and read-only. This install keeps one brokerage account. Create a personal OAuth application, then Create Grant with the read scope only. Production and sandbox credentials are not interchangeable. Saving stores the values on this computer and does not import positions or run a search. A different account needs its own Docker data volume. Revoking the grant at tastytrade is a separate step from Disconnect.
       </Typography>
       {signedIn ? (
         <Stack spacing={1.25} sx={{ mt: 1.5, maxWidth: 480 }}>

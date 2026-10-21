@@ -115,6 +115,7 @@ import {
   rememberImportFingerprint,
   rememberPendingFingerprint,
   saveManagedCredentials,
+  singleAccountImport,
   validateCredentialInput,
 } from './brokerage/connection.js';
 import { refreshBrokerConnection } from './context.js';
@@ -242,10 +243,16 @@ async function runSync(
   if (!context.brokerConnection.providerAllowed || !context.brokerage) {
     throw new HttpError(409, 'Live brokerage access is disabled.');
   }
-  const fingerprint = accountFingerprint(context.brokerConnection.environment, await accountNumbers(context.brokerage));
-  if (importNeedsDecision(context.database.db, fingerprint) && body.acknowledgeAccountChange !== 'keep-history') {
-    rememberPendingFingerprint(context.database.db, fingerprint);
-    throw new HttpError(409, 'This connection is for a different brokerage account or environment. Existing history was kept. Import again only after choosing to keep that history.');
+  const numbers = await accountNumbers(context.brokerage);
+  let fingerprint: string;
+  try {
+    fingerprint = singleAccountImport(context.database.db, context.brokerConnection.environment, numbers).fingerprint;
+  } catch (error) {
+    rememberPendingFingerprint(context.database.db, accountFingerprint(context.brokerConnection.environment, numbers));
+    throw new HttpError(409, error instanceof Error ? error.message : 'Import was not started.');
+  }
+  if (importNeedsDecision(context.database.db, fingerprint)) {
+    throw new HttpError(409, 'This grant is for a different account or environment than the imported history. Existing records were not changed or combined. Use a separate Docker data volume for that account.');
   }
   rememberImportFingerprint(context.database.db, fingerprint);
   const actor = { type: 'session' as const, sessionId: session.id };
@@ -426,13 +433,21 @@ export function registerRoutes(app: Express, context: AppContext): void {
         throw new HttpError(409, 'Read-only brokerage access is not armed. Saving credentials does not contact tastytrade by itself.');
       }
       const numbers = await accountNumbers(context.brokerage);
-      if (numbers.length === 0) {
-        context.brokerRuntime.connectedThisProcess = false;
-        context.brokerRuntime.lastError = 'The brokerage did not confirm an account.';
-        throw new HttpError(502, 'The brokerage did not confirm an account.');
+      let message = 'Connected. Read-only access was confirmed. Nothing was imported.';
+      let accountChangePending = false;
+      try {
+        singleAccountImport(context.database.db, context.brokerConnection.environment, numbers);
+      } catch (error) {
+        const text = error instanceof Error ? error.message : 'Import is blocked.';
+        if (numbers.length === 0) {
+          context.brokerRuntime.connectedThisProcess = false;
+          context.brokerRuntime.lastError = text;
+          throw new HttpError(502, text);
+        }
+        accountChangePending = true;
+        message = text;
+        rememberPendingFingerprint(context.database.db, accountFingerprint(context.brokerConnection.environment, numbers));
       }
-      const fingerprint = accountFingerprint(context.brokerConnection.environment, numbers);
-      rememberPendingFingerprint(context.database.db, fingerprint);
       context.brokerRuntime.connectedThisProcess = true;
       context.brokerRuntime.lastError = null;
       const body = overview(context, session);
@@ -441,10 +456,8 @@ export function registerRoutes(app: Express, context: AppContext): void {
         connection: {
           ...body.connection,
           state: 'connected',
-          accountChangePending: importNeedsDecision(context.database.db, fingerprint),
-          message: importNeedsDecision(context.database.db, fingerprint)
-            ? 'Connected. This grant sees a different account or environment than the imported history. Nothing was imported.'
-            : 'Connected. Read-only access was confirmed. Nothing was imported.',
+          accountChangePending,
+          message,
         },
       });
     } catch (error) {
