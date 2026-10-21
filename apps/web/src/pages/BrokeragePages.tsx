@@ -795,5 +795,12 @@ function PortfolioGate({ state }: { state: Exclude<PortfolioState, { kind: 'read
     );
   }
   if (state.kind === 'signed-out') return <Alert severity="warning">Sign in on Broker & Data before imported positions are shown.</Alert>;
+  if (state.message.includes('Select an account')) {
+    return (
+      <Alert severity="info">
+        No brokerage positions are imported yet. Connect tastytrade on Broker & Data, then use Import / Refresh Positions. Demo positions are not shown in this view.
+      </Alert>
+    );
+  }
   return <Alert severity="error">{state.message}</Alert>;
 }
