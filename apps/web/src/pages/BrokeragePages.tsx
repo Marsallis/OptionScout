@@ -240,7 +240,7 @@ function DemoOpenPositions({ positions }: { positions: Dashboard['positions'] })
             <Chip size="small" label="DEMO" />
             <Chip size="small" variant="outlined" label={position.strategy === 'pmcc' ? 'PMCC' : 'LEAPS'} />
           </Stack>
-          {position.legs.map((leg) => (
+          {position.legs.filter((leg) => leg.status === 'open').map((leg) => (
             <Typography key={`${position.id}-${leg.side}-${leg.strike}`} variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>
               {leg.side} {leg.optionType} {leg.strike} exp {leg.expiration} qty {leg.quantity}
             </Typography>
