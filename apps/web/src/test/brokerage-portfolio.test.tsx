@@ -389,6 +389,13 @@ describe('authenticated brokerage portfolio', () => {
     expect(requested.some((entry) => entry.includes('/api/broker/sync'))).toBe(false);
     expect(requested.some((entry) => entry.includes('/api/finder/smart-scans'))).toBe(false);
 
+    await user.click(screen.getByRole('link', { name: 'My Positions' }));
+    expect(await screen.findByText(/Open contracts you hold/)).toBeInTheDocument();
+    expect(screen.getByText(/280121C00155000/)).toBeInTheDocument();
+    expect(screen.getByText(/261030C00227500/)).toBeInTheDocument();
+    expect(screen.queryByText(/260402C00210000/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Overview' }));
+
     await user.click(screen.getByRole('link', { name: /280121C00155000/ }));
     expect(await screen.findByText(/Gross premium: \$6,300\.00/)).toBeInTheDocument();
     expect(screen.getByText(/Opening cash is not realized profit/i)).toBeInTheDocument();

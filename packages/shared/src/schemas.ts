@@ -253,6 +253,23 @@ export const brokerOverviewSchema = z
         secretFilePresent: z.boolean(),
         lastSuccessAt: z.string().datetime().nullable(),
         message: z.string().min(1),
+        connectionMode: z.enum(['legacy', 'managed', 'disconnected']).optional(),
+        providerAllowed: z.boolean().optional(),
+        hardDisabled: z.boolean().optional(),
+        accountChangePending: z.boolean().optional(),
+        permissionWarning: z.string().nullable().optional(),
+        accountSelected: z.boolean().optional(),
+        accountChoices: z
+          .array(
+            z
+              .object({
+                choiceId: z.string().min(8),
+                maskedAccount: z.string().min(5),
+                accountType: z.string().min(1),
+              })
+              .strict(),
+          )
+          .optional(),
       })
       .strict(),
     quotes: z
@@ -331,6 +348,7 @@ export const syncRequestSchema = z
       })
       .strict()
       .optional(),
+    acknowledgeAccountChange: z.literal('keep-history').optional(),
   })
   .strict();
 

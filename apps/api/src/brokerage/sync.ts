@@ -70,7 +70,13 @@ function recordRun(
     .run();
 }
 
-export async function discoverAccounts(db: AppDatabase, client: BrokerageReadClient, actor: SyncActor, scheduledSyncEnabled: boolean): Promise<void> {
+export async function discoverAccounts(
+  db: AppDatabase,
+  client: BrokerageReadClient,
+  actor: SyncActor,
+  scheduledSyncEnabled: boolean,
+  onlyAccountNumber?: string,
+): Promise<void> {
   authorizeSync(actor, scheduledSyncEnabled);
   const startedAt = new Date().toISOString();
   try {
@@ -83,6 +89,7 @@ export async function discoverAccounts(db: AppDatabase, client: BrokerageReadCli
       const account = record.account ?? {};
       const accountNumber = typeof account['account-number'] === 'string' ? account['account-number'] : '';
       if (!accountNumber) continue;
+      if (onlyAccountNumber && accountNumber !== onlyAccountNumber) continue;
       discovered.push(accountNumber);
       const existing = db
         .select()
@@ -112,12 +119,14 @@ export async function discoverAccounts(db: AppDatabase, client: BrokerageReadCli
           .run();
       }
     }
-    const rows = db.select().from(brokerAccounts).where(eq(brokerAccounts.provider, 'tastytrade')).all();
-    if (rows.length === 1 && rows[0] && !rows[0].selected) {
-      db.update(brokerAccounts).set({ selected: true }).where(eq(brokerAccounts.id, rows[0].id)).run();
+    if (!onlyAccountNumber) {
+      const rows = db.select().from(brokerAccounts).where(eq(brokerAccounts.provider, 'tastytrade')).all();
+      if (rows.length === 1 && rows[0] && !rows[0].selected) {
+        db.update(brokerAccounts).set({ selected: true }).where(eq(brokerAccounts.id, rows[0].id)).run();
+      }
     }
     if (discovered.length === 0) {
-      throw new Error('The brokerage returned no accounts.');
+      throw new Error(onlyAccountNumber ? 'The selected account was not returned.' : 'The brokerage returned no accounts.');
     }
     writeMeta(db, 'broker_last_success_at', new Date().toISOString());
     recordRun(db, { accountId: null, kind: 'accounts', status: 'succeeded', startedAt, errorMessage: null, actor });
@@ -134,10 +143,24 @@ export async function discoverAccounts(db: AppDatabase, client: BrokerageReadCli
   }
 }
 
+export function selectAccountNumber(db: AppDatabase, accountNumber: string): void {
+  const row = db
+    .select()
+    .from(brokerAccounts)
+    .where(and(eq(brokerAccounts.provider, 'tastytrade'), eq(brokerAccounts.accountNumber, accountNumber)))
+    .get();
+  if (!row) throw new Error('That account is not available.');
+  selectBrokerAccount(db, row.id);
+}
+
 export function selectBrokerAccount(db: AppDatabase, accountId: string): void {
   const row = db.select().from(brokerAccounts).where(eq(brokerAccounts.id, accountId)).get();
   if (!row) {
     throw new Error('That account is not available.');
+  }
+  const bound = readMeta(db, 'broker.selected.account');
+  if (bound && row.accountNumber !== bound) {
+    throw new Error('This installation already keeps history for one account. Use a separate Docker data volume for a different account.');
   }
   db.update(brokerAccounts).set({ selected: false }).where(eq(brokerAccounts.provider, 'tastytrade')).run();
   db.update(brokerAccounts).set({ selected: true }).where(eq(brokerAccounts.id, accountId)).run();

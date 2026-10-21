@@ -47,11 +47,12 @@ import {
 import { authorizeSync } from './brokerage/actor.js';
 import { brokerageFailureMessage, ScheduledSyncDisabledError, SyncInputError, TastytradeError } from './brokerage/errors.js';
 import { buildBrokerOverview, listImportedPositions, listImportedTransactions } from './brokerage/status.js';
-import { discoverAccounts, selectBrokerAccount, syncPositions, syncQuotes, syncTransactions } from './brokerage/sync.js';
+import { discoverAccounts, selectAccountNumber, selectBrokerAccount, syncPositions, syncQuotes, syncTransactions } from './brokerage/sync.js';
 import { buildPortfolio, confirmStrategy, deleteStrategy } from './accounting/portfolio.js';
 import type { AppContext } from './context.js';
 import { quoteSnapshots } from './db/schema.js';
 import { deleteFinderBookmark, listFinderBookmarks, saveFinderBookmark } from './finder/bookmarks.js';
+import { SavedIdeaError, createSavedIdea, deleteSavedIdea, listSavedIdeas } from './finder/saved-ideas.js';
 import {
   cancelFinderScan,
   continueFinderScan,
@@ -106,6 +107,20 @@ import {
   setDefaultStrategyProfile,
 } from './strategy/profiles.js';
 import { runDxlinkDiagnostic } from './marketdata/diagnostic.js';
+import {
+  CredentialInputError,
+  accountFingerprint,
+  assertHistoryMatchesAccount,
+  chooseStagedAccount,
+  disconnectBroker,
+  importNeedsDecision,
+  rememberImportFingerprint,
+  saveManagedCredentials,
+  selectedImportAccount,
+  stageAccountChoices,
+  validateCredentialInput,
+} from './brokerage/connection.js';
+import { refreshBrokerConnection } from './context.js';
 import { openLiveDxlinkSocket } from './marketdata/live-socket.js';
 import type { SettingsUpdate } from '@optionscout/shared';
 import { ZodError } from 'zod';
@@ -150,6 +165,7 @@ function overview(context: AppContext, session: OwnerSession | null) {
       authenticated: Boolean(session),
       ownerConfigured: ownerIsConfigured(context.database.db),
       portfolioView: settings.portfolioView,
+      connection: context.brokerConnection,
     }),
   );
 }
@@ -164,6 +180,14 @@ function selectedAccountId(context: AppContext): string {
 }
 
 function sendKnownError(res: Response, error: unknown): boolean {
+  if (error instanceof SavedIdeaError) {
+    res.status(error.message.includes('not found') ? 404 : 400).json({ error: error.message });
+    return true;
+  }
+  if (error instanceof CredentialInputError) {
+    res.status(400).json({ error: error.message });
+    return true;
+  }
   if (error instanceof HttpError) {
     res.status(error.status).json({ error: error.message });
     return true;
@@ -196,15 +220,64 @@ function sendKnownError(res: Response, error: unknown): boolean {
   return false;
 }
 
-async function runSync(context: AppContext, session: OwnerSession, body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } }): Promise<void> {
-  if (!context.config.liveEnabled || !context.brokerage) {
+async function accountDetails(client: NonNullable<AppContext['brokerage']>): Promise<Array<{ accountNumber: string; accountType: string }>> {
+  const body = await client.getJson('/customers/me/accounts');
+  const items = body && typeof body === 'object' && Array.isArray((body as { data?: { items?: unknown[] } }).data?.items)
+    ? (body as { data: { items: unknown[] } }).data.items
+    : [];
+  const accounts: Array<{ accountNumber: string; accountType: string }> = [];
+  for (const item of items) {
+    const record = item && typeof item === 'object' ? (item as { account?: { 'account-number'?: unknown; 'account-type-name'?: unknown } }).account : undefined;
+    const number = record?.['account-number'];
+    if (typeof number !== 'string' || !number.trim()) continue;
+    const accountType = typeof record?.['account-type-name'] === 'string' ? record['account-type-name'] : 'Account';
+    accounts.push({ accountNumber: number.trim(), accountType });
+  }
+  return accounts;
+}
+
+async function runSync(
+  context: AppContext,
+  session: OwnerSession,
+  body: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } },
+): Promise<void> {
+  if (context.brokerConnection.hardDisabled) {
+    throw new HttpError(409, 'TASTYTRADE_DISABLE_LIVE is on. No brokerage request will be sent.');
+  }
+  if (!context.brokerConnection.providerAllowed || !context.brokerage) {
     throw new HttpError(409, 'Live brokerage access is disabled.');
   }
+  const selected = selectedImportAccount(context.database.db);
+  if (!selected) {
+    throw new HttpError(409, 'Select one account from the connection test before importing. Nothing was imported.');
+  }
+  const live = await accountDetails(context.brokerage);
+  if (!live.some((account) => account.accountNumber === selected.accountNumber)) {
+    throw new HttpError(409, 'The selected account is not on this connection. Nothing was imported.');
+  }
+  const fingerprint = accountFingerprint(selected.environment, [selected.accountNumber]);
+  if (context.brokerConnection.environment !== selected.environment) {
+    throw new HttpError(409, 'This connection uses a different environment than the selected account. Existing records were not changed. Use a separate Docker data volume.');
+  }
+  try {
+    assertHistoryMatchesAccount(context.database.db, selected.accountNumber);
+  } catch (error) {
+    throw new HttpError(409, error instanceof Error ? error.message : 'Existing brokerage history was left unchanged.');
+  }
+  if (importNeedsDecision(context.database.db, fingerprint)) {
+    throw new HttpError(409, 'This account or environment is different from the imported history. Existing records were not changed. Use a separate Docker data volume for that account.');
+  }
+  rememberImportFingerprint(context.database.db, fingerprint);
   const actor = { type: 'session' as const, sessionId: session.id };
   authorizeSync(actor, context.config.scheduledSyncEnabled);
   const client = context.brokerage;
   try {
-    await discoverAccounts(context.database.db, client, actor, context.config.scheduledSyncEnabled);
+    await discoverAccounts(context.database.db, client, actor, context.config.scheduledSyncEnabled, selected.accountNumber);
+    try {
+      selectAccountNumber(context.database.db, selected.accountNumber);
+    } catch (error) {
+      throw new HttpError(409, error instanceof Error ? error.message : 'The selected account was not stored.');
+    }
     await syncPositions(context.database.db, client, actor, context.config.scheduledSyncEnabled);
     await syncTransactions(context.database.db, client, actor, {
       lookbackDays: context.config.transactionLookbackDays,
@@ -215,10 +288,9 @@ async function runSync(context: AppContext, session: OwnerSession, body: { trans
     context.brokerRuntime.connectedThisProcess = true;
     context.brokerRuntime.lastError = null;
   } catch (error) {
-    if (!(error instanceof SyncInputError)) {
-      context.brokerRuntime.connectedThisProcess = false;
-      context.brokerRuntime.lastError = error instanceof TastytradeError ? brokerageFailureMessage(error.status) : 'The brokerage request failed.';
-    }
+    if (error instanceof HttpError || error instanceof SyncInputError) throw error;
+    context.brokerRuntime.connectedThisProcess = false;
+    context.brokerRuntime.lastError = error instanceof TastytradeError ? brokerageFailureMessage(error.status) : 'The brokerage request failed.';
     throw error;
   }
 }
@@ -328,6 +400,87 @@ export function registerRoutes(app: Express, context: AppContext): void {
     }
   });
 
+  app.post('/api/broker/credentials', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const saved = saveManagedCredentials(context.database.db, context.config.databasePath, validateCredentialInput(req.body ?? {}));
+      const active = refreshBrokerConnection(context);
+      active.permissionWarning = saved.permissionWarning;
+      const body = overview(context, session);
+      const serialized = JSON.stringify(body);
+      for (const secret of [req.body?.clientSecret, req.body?.refreshToken, req.body?.clientId]) {
+        if (typeof secret === 'string' && secret && serialized.includes(secret)) {
+          throw new HttpError(500, 'Credential response was withheld.');
+        }
+      }
+      res.json({ ...body, connection: { ...body.connection, permissionWarning: saved.permissionWarning } });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/disconnect', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      disconnectBroker(context.database.db, context.config.databasePath);
+      refreshBrokerConnection(context);
+      const body = overview(context, session);
+      res.json({
+        ...body,
+        connection: {
+          ...body.connection,
+          message: `${body.connection.message} Revoking the grant at tastytrade is a separate action.`,
+        },
+      });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/test-connection', async (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      if (context.brokerConnection.hardDisabled) {
+        throw new HttpError(409, 'TASTYTRADE_DISABLE_LIVE is on. Test Connection will not contact tastytrade.');
+      }
+      if (!context.brokerConnection.providerAllowed || !context.brokerage) {
+        throw new HttpError(409, 'Read-only brokerage access is not armed. Saving credentials does not contact tastytrade by itself.');
+      }
+      const accounts = await accountDetails(context.brokerage);
+      if (accounts.length === 0) {
+        context.brokerRuntime.connectedThisProcess = false;
+        context.brokerRuntime.lastError = 'The brokerage did not confirm an account. Nothing was imported.';
+        throw new HttpError(502, 'The brokerage did not confirm an account. Nothing was imported.');
+      }
+      const choices = stageAccountChoices(context.database.db, context.brokerConnection.environment, accounts);
+      const fixtureNote = context.config.acceptanceFixture ? ' Fictional local test. tastytrade was not contacted.' : '';
+      const message = (choices.length === 1
+        ? 'Connected. Confirm this account, then use Import / Refresh Positions. Nothing was imported.'
+        : 'Connected. Choose one account, then use Import / Refresh Positions. Nothing was imported.') + fixtureNote;
+      context.brokerRuntime.connectedThisProcess = true;
+      context.brokerRuntime.lastError = null;
+      const body = overview(context, session);
+      const serialized = JSON.stringify({ ...body, connection: { ...body.connection, accountChoices: choices, message } });
+      for (const account of accounts) {
+        if (serialized.includes(account.accountNumber)) throw new HttpError(500, 'Account response was withheld.');
+      }
+      res.json({
+        ...body,
+        connection: {
+          ...body.connection,
+          state: 'connected',
+          accountChoices: choices,
+          message,
+        },
+      });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
   app.post('/api/broker/accounts/select', (req, res, next) => {
     try {
       const session = requireMutationSession(req, context);
@@ -346,6 +499,30 @@ export function registerRoutes(app: Express, context: AppContext): void {
         res.status(404).json({ error: 'That account is not available.' });
         return;
       }
+      if (error instanceof Error && error.message.includes('separate Docker data volume')) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/broker/accounts/choose', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const choiceId = typeof req.body?.choiceId === 'string' ? req.body.choiceId : '';
+      if (!/^[a-f0-9]{16}$/.test(choiceId)) {
+        res.status(400).json({ error: 'Choose one account from the latest connection test.' });
+        return;
+      }
+      try {
+        chooseStagedAccount(context.database.db, choiceId);
+      } catch (error) {
+        throw new HttpError(409, error instanceof Error ? error.message : 'That account was not selected. Nothing was imported.');
+      }
+      res.json(overview(context, session));
+    } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
   });
@@ -640,6 +817,46 @@ export function registerRoutes(app: Express, context: AppContext): void {
         res.status(error.status).json({ error: error.message });
         return;
       }
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.get('/api/saved-ideas', (req, res, next) => {
+    try {
+      requireSession(req, context);
+      res.json({ ideas: listSavedIdeas(context.database.db) });
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/saved-ideas', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      const created = createSavedIdea(context.database.db, {
+        underlying: String(req.body?.underlying ?? ''),
+        longOcc: String(req.body?.longOcc ?? ''),
+        shortOcc: typeof req.body?.shortOcc === 'string' ? req.body.shortOcc : null,
+        profileId: typeof req.body?.profileId === 'string' ? req.body.profileId : null,
+        profileRevision: typeof req.body?.profileRevision === 'number' ? req.body.profileRevision : null,
+        sessionId: typeof req.body?.sessionId === 'string' ? req.body.sessionId : null,
+        quoteAsOf: typeof req.body?.quoteAsOf === 'string' ? req.body.quoteAsOf : null,
+        notes: typeof req.body?.notes === 'string' ? req.body.notes : '',
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.delete('/api/saved-ideas/:id', (req, res, next) => {
+    try {
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+      deleteSavedIdea(context.database.db, String(req.params.id));
+      res.status(204).end();
+    } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
   });

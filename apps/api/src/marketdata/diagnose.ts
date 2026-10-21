@@ -1,4 +1,5 @@
 import { brokerageBaseUrl, TastytradeClient } from '../brokerage/client.js';
+import { resolveActiveConnection } from '../brokerage/connection.js';
 import { parseConfig } from '../config.js';
 import { openDatabase } from '../db/client.js';
 import { applyMigrations, migrationsDirectory } from '../db/migrate.js';
@@ -25,11 +26,24 @@ export async function main(): Promise<void> {
   }
   const database = openDatabase(config.databasePath);
   applyMigrations(database.sqlite, migrationsDirectory());
+  const active = resolveActiveConnection({
+    db: database.db,
+    databasePath: config.databasePath,
+    legacySecretPath: config.secretFilePath,
+    liveEnabled: config.liveEnabled,
+    hardDisabled: config.hardDisabled,
+  });
+  if (!active.providerAllowed || !active.credentials || active.environment === 'unset') {
+    console.error('DXLink live diagnostic is disabled.');
+    database.close();
+    process.exitCode = 2;
+    return;
+  }
   let closeCode: number | null = null;
   try {
     const client = new TastytradeClient({
-      baseUrl: brokerageBaseUrl(config.tastytradeEnvironment),
-      credentials: config.tastytrade,
+      baseUrl: brokerageBaseUrl(active.environment),
+      credentials: active.credentials,
     });
     const report = await runDxlinkDiagnostic({
       enabled: true,

@@ -129,6 +129,20 @@ export async function main(): Promise<void> {
 
   const database = openDatabase(config.databasePath);
   applyMigrations(database.sqlite, migrationsDirectory());
+  const { resolveActiveConnection } = await import('../brokerage/connection.js');
+  const active = resolveActiveConnection({
+    db: database.db,
+    databasePath: config.databasePath,
+    legacySecretPath: config.secretFilePath,
+    liveEnabled: config.liveEnabled,
+    hardDisabled: config.hardDisabled,
+  });
+  if (!active.providerAllowed || !active.credentials || active.environment === 'unset') {
+    console.error('Finder live scan is disabled.');
+    database.close();
+    process.exitCode = 2;
+    return;
+  }
   resetFinderScans();
   const startedAt = new Date();
   const marketSession = isRegularUsEquitySession(startedAt) ? 'regular' : 'closed';
@@ -145,8 +159,8 @@ export async function main(): Promise<void> {
   let quoteSource: LiveFinderQuoteSource | null = null;
   try {
     const client = new TastytradeClient({
-      baseUrl: brokerageBaseUrl(config.tastytradeEnvironment),
-      credentials: config.tastytrade,
+      baseUrl: brokerageBaseUrl(active.environment),
+      credentials: active.credentials,
     });
     const profile = readStrategyProfile(database.db);
     if (profile.id !== SAL_PMCC_DEEP_ITM.id || profile.name !== SAL_PMCC_DEEP_ITM.name) {

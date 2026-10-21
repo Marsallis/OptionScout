@@ -14,6 +14,7 @@ interface AppStateValue {
   signOut: () => Promise<void>;
   syncNow: (request: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } }) => Promise<BrokerOverview>;
   chooseAccount: (accountId: string) => Promise<void>;
+  applyBroker: (next: BrokerOverview) => void;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
@@ -78,6 +79,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       },
       async chooseAccount(accountId) {
         setBroker(await selectBrokerAccount(accountId));
+      },
+      applyBroker(next) {
+        setBroker(next);
       },
     }),
     [status, error, dashboard, broker, settings, session],

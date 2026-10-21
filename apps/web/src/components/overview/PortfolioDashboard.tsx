@@ -18,6 +18,7 @@ import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
 import { formatDate } from '../../lib/format';
 import { buildAttention, buildSnapshot, calendarDaysUntil, localDateIso, portfolioStatusLine, type AttentionItem, type SnapshotCard } from './overviewModel';
+import { confirmedShortLeg } from './confirmedShort';
 
 const cardValueSize = { xs: '1.6rem', md: '2rem' };
 
@@ -136,12 +137,12 @@ export function OpenPositionsTable({ portfolio }: { portfolio: Portfolio }) {
   const open = portfolio.positions.filter((position) => position.direction !== 'flat');
   const groupedIds = new Set<string>();
   const groups = portfolio.strategies.map((strategy) => {
+    const leg = confirmedShortLeg(strategy.performance.shortSymbols, portfolio.positions);
     const long = open.find((position) => position.symbol === strategy.longSymbol) ?? null;
-    const shortSymbol = strategy.performance.shortSymbols[0] ?? null;
-    const short = shortSymbol ? open.find((position) => position.symbol === shortSymbol) ?? null : null;
+    const short = leg.activeSymbol ? open.find((position) => position.symbol === leg.activeSymbol) ?? null : null;
     if (long) groupedIds.add(long.id);
     if (short) groupedIds.add(short.id);
-    return { id: strategy.id, underlying: strategy.underlying, long, short };
+    return { id: strategy.id, underlying: strategy.underlying, long, short, closedShort: leg.closed };
   });
   const rest = open.filter((position) => !groupedIds.has(position.id));
   return (
@@ -157,6 +158,7 @@ export function OpenPositionsTable({ portfolio }: { portfolio: Portfolio }) {
           {groups.map((group) => (
             <Paper key={group.id} variant="outlined" sx={{ p: 1.5 }}>
               <Typography variant="body1" sx={{ fontWeight: 750, mb: 1 }}>{group.underlying} — Poor Man&apos;s Covered Call</Typography>
+              {group.closedShort ? <Typography variant="body2">The confirmed short call is closed. It is not shown as an open leg, and no replacement was assigned.</Typography> : null}
               {group.long ? <PositionSummary position={group.long} /> : null}
               {group.short ? <PositionSummary position={group.short} /> : null}
             </Paper>
@@ -188,7 +190,7 @@ export function OpenPositionsTable({ portfolio }: { portfolio: Portfolio }) {
           </TableHead>
           <TableBody>
             {groups.map((group) => (
-              <GroupRows key={group.id} underlying={group.underlying} long={group.long} short={group.short} />
+              <GroupRows key={group.id} underlying={group.underlying} long={group.long} short={group.short} closedShort={group.closedShort} />
             ))}
             {rest.map((position) => (
               <PositionRow key={position.id} position={position} />
@@ -230,16 +232,19 @@ function GroupRows({
   underlying,
   long,
   short,
+  closedShort,
 }: {
   underlying: string;
   long: PortfolioPosition | null;
   short: PortfolioPosition | null;
+  closedShort: boolean;
 }) {
   return (
     <>
       <TableRow>
         <TableCell colSpan={7} sx={{ fontWeight: 750, bgcolor: 'action.hover' }}>
           {underlying} — Poor Man&apos;s Covered Call
+          {closedShort ? ' · confirmed short call is closed and is not an open leg' : ''}
         </TableCell>
       </TableRow>
       {long ? <PositionRow position={long} /> : null}

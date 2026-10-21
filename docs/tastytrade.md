@@ -36,7 +36,7 @@ The API process, not the browser, will exchange that refresh token:
 
 The response access token is a JWT valid for 15 minutes. Refreshing does not return a new refresh token. An expired access token produces HTTP 401.
 
-Store the refresh token and client secret only in the local data volume. Cache the access token in memory. Refresh on a schedule, or when it is inside a short window of expiry, not on every API call. On 401, refresh once and retry the read. If refresh fails, mark the connection disconnected and stop. Never log either token.
+Store the refresh token and client secret only in the local data volume, mode 0600 inside Linux. A Windows process cannot enforce that Unix mode. The file is not encrypted, and a backup of the Docker data volume can include it. Cache the access token in memory. Disconnect persists across restarts and does not fall back to `secrets/tastytrade.env`. `TASTYTRADE_ENABLE_LIVE=true` does not override a disconnect. `TASTYTRADE_DISABLE_LIVE=true` blocks Test Connection, import, and research calls. `TASTYTRADE_ACCEPTANCE_FIXTURE` defaults to false. A production process ignores that flag, so a fictional account cannot be imported into a real installation by turning the flag on. The fixture is available only when `NODE_ENV` is not `production`. Do not turn it on for a real account. Refresh on a schedule, or when it is inside a short window of expiry, not on every API call. On 401, refresh once and retry the read. If refresh fails, mark the connection disconnected and stop. Never log either token.
 
 Third-party authorization, when it exists later, uses the authorization-code grant against `https://my.tastytrade.com/auth.html` (sandbox URL is documented by tastytrade separately). Customers need 2FA enabled before they can grant `read` or `trade`. OptionScout must not request `trade`.
 
@@ -46,7 +46,7 @@ The OAuth guide shows position reads at:
 
 `GET /accounts/{account_number}/positions`
 
-Send `Authorization: Bearer <access token>` and the User-Agent. Map the result into the existing `positions` and `option_legs` tables with `is_demo = 0` and `provider = tastytrade`.
+Send `Authorization: Bearer <access token>` and the User-Agent. Import only the account the owner confirmed after Test Connection. A grant that can see several accounts is not rejected. The owner picks one. The browser receives the account type and a masked number, not the full account number. A later import of a different account or the other environment is refused, and the stored transactions stay in place.
 
 Transaction history is an account REST read. Confirm the current path, filters, and pagination in the OpenAPI reference at implementation time, then map fills into the existing `transactions` table. Do not invent pagination behavior.
 

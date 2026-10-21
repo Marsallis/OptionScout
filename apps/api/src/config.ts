@@ -30,6 +30,9 @@ export interface AppConfig {
   runningInDocker: boolean;
   staticDir: string | null;
   liveEnabled: boolean;
+  hardDisabled: boolean;
+  /** Local acceptance stand-in. Never contacts tastytrade. Default false. */
+  acceptanceFixture: boolean;
   dxlinkLiveDiagnostic: boolean;
   finderLiveScan: boolean;
   smartScanLive: boolean;
@@ -137,6 +140,8 @@ const configSchema = z
     RUNNING_IN_DOCKER: z.string().trim().default('false'),
     STATIC_DIR: z.string().optional(),
     TASTYTRADE_ENABLE_LIVE: z.string().trim().default('false'),
+    TASTYTRADE_DISABLE_LIVE: z.string().trim().default('false'),
+    TASTYTRADE_ACCEPTANCE_FIXTURE: z.string().trim().default('false'),
     DXLINK_LIVE_DIAGNOSTIC: z.string().trim().default('false'),
     FINDER_LIVE_SCAN: z.string().trim().default('false'),
     /** Separate gate for multi-ticker Smart Scan live chains. Default false for 1D.2a. */
@@ -185,6 +190,20 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         message: 'TASTYTRADE_ENABLE_LIVE must be "true" or "false".',
         path: ['TASTYTRADE_ENABLE_LIVE'],
+      });
+    }
+    if (value.TASTYTRADE_DISABLE_LIVE !== 'true' && value.TASTYTRADE_DISABLE_LIVE !== 'false') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'TASTYTRADE_DISABLE_LIVE must be "true" or "false".',
+        path: ['TASTYTRADE_DISABLE_LIVE'],
+      });
+    }
+    if (value.TASTYTRADE_ACCEPTANCE_FIXTURE !== 'true' && value.TASTYTRADE_ACCEPTANCE_FIXTURE !== 'false') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'TASTYTRADE_ACCEPTANCE_FIXTURE must be "true" or "false".',
+        path: ['TASTYTRADE_ACCEPTANCE_FIXTURE'],
       });
     }
     if (value.FINDER_LIVE_SCAN !== 'true' && value.FINDER_LIVE_SCAN !== 'false') {
@@ -260,6 +279,8 @@ export function parseConfig(
     RUNNING_IN_DOCKER: env.RUNNING_IN_DOCKER,
     STATIC_DIR: env.STATIC_DIR,
     TASTYTRADE_ENABLE_LIVE: env.TASTYTRADE_ENABLE_LIVE,
+    TASTYTRADE_DISABLE_LIVE: env.TASTYTRADE_DISABLE_LIVE,
+    TASTYTRADE_ACCEPTANCE_FIXTURE: env.TASTYTRADE_ACCEPTANCE_FIXTURE,
     DXLINK_LIVE_DIAGNOSTIC: env.DXLINK_LIVE_DIAGNOSTIC,
     FINDER_LIVE_SCAN: env.FINDER_LIVE_SCAN,
     SMART_SCAN_LIVE: env.SMART_SCAN_LIVE,
@@ -301,6 +322,8 @@ export function parseConfig(
     runningInDocker: parsed.data.RUNNING_IN_DOCKER === 'true',
     staticDir,
     liveEnabled,
+    hardDisabled: parsed.data.TASTYTRADE_DISABLE_LIVE === 'true',
+    acceptanceFixture: parsed.data.NODE_ENV !== 'production' && parsed.data.TASTYTRADE_ACCEPTANCE_FIXTURE === 'true',
     dxlinkLiveDiagnostic: parsed.data.DXLINK_LIVE_DIAGNOSTIC === 'true',
     finderLiveScan: parsed.data.FINDER_LIVE_SCAN === 'true',
     smartScanLive: parsed.data.SMART_SCAN_LIVE === 'true',

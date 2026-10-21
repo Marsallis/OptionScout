@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { Portfolio, PortfolioPosition } from '@optionscout/shared';
+import type { Dashboard, Portfolio, PortfolioPosition } from '@optionscout/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -16,10 +16,12 @@ import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { confirmPortfolioStrategy, deletePortfolioStrategy, fetchPortfolio } from '../api/client';
+import { confirmPortfolioStrategy, createSavedIdea, deletePortfolioStrategy, fetchFinderBookmarks, fetchPortfolio, fetchSavedIdeas } from '../api/client';
 import { AttentionList, OpenPositionsTable, PortfolioHeader, SnapshotGrid } from '../components/overview/PortfolioDashboard';
 import { calendarDaysUntil, localDateIso } from '../components/overview/overviewModel';
+import { confirmedShortLeg } from '../components/overview/confirmedShort';
 import { ResearchPanel } from '../components/overview/ResearchPanel';
 import { formatDate, formatMoney, formatSnapshot } from '../lib/format';
 import { useAppState } from '../state/AppState';
@@ -206,31 +208,186 @@ export function BrokerageOverview() {
 }
 
 export function PositionsPage() {
-  const { settings } = useAppState();
+  const { settings, dashboard, session } = useAppState();
+  const [tab, setTab] = useState<'open' | 'saved'>('open');
   const portfolio = usePortfolio();
-  if (settings?.portfolioView !== 'brokerage') {
-    return (
-      <Stack spacing={2}>
-        <Typography variant="h4" component="h1">
-          My Positions
-        </Typography>
-        <Alert severity="info">The demo book stays on Overview. Choose the brokerage portfolio in Settings, then sign in, to see imported positions.</Alert>
-      </Stack>
-    );
-  }
-  if (portfolio.kind !== 'ready') return <PortfolioGate state={portfolio} />;
+  const demo = settings?.portfolioView !== 'brokerage';
   return (
     <Stack spacing={2.5}>
-      <Typography variant="h4" component="h1">
-        My Positions
+      <Typography variant="h4" component="h1">My Positions</Typography>
+      <Typography variant="body2" color="text.secondary">
+        Open contracts you hold, and research ideas you have not bought. Closed history stays on Broker & Data.
       </Typography>
-      <Alert severity="info">{portfolio.data.disclaimer}</Alert>
-      <Paper sx={{ p: 2, overflowX: 'auto' }}>
-        <Typography variant="h6">Reconstructed contracts</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          Flat rows are closed cycles or withheld events. They are not added to the open LEAPS or short-call figures.
+      <Stack direction="row" spacing={1}>
+        <Button variant={tab === 'open' ? 'contained' : 'outlined'} onClick={() => setTab('open')}>Open Positions</Button>
+        <Button variant={tab === 'saved' ? 'contained' : 'outlined'} onClick={() => setTab('saved')}>Saved Ideas</Button>
+      </Stack>
+      {tab === 'saved' ? <SavedIdeasPanel signedIn={session?.authenticated === true} /> : demo ? <DemoOpenPositions positions={dashboard?.positions ?? []} /> : <BrokerOpenPositions portfolio={portfolio} />}
+    </Stack>
+  );
+}
+
+function DemoOpenPositions({ positions }: { positions: Dashboard['positions'] }) {
+  if (positions.length === 0) {
+    return <Alert severity="info">No fictional demo positions are installed.</Alert>;
+  }
+  return (
+    <Stack spacing={1.5}>
+      <Alert severity="info">DEMO. These positions are fictional and are not a brokerage account.</Alert>
+      {positions.map((position) => (
+        <Paper key={position.id} sx={{ p: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="h6">{position.underlying}</Typography>
+            <Chip size="small" label="DEMO" />
+            <Chip size="small" variant="outlined" label={position.strategy === 'pmcc' ? 'PMCC' : 'LEAPS'} />
+          </Stack>
+          {position.legs.filter((leg) => leg.status === 'open').map((leg) => (
+            <Typography key={`${position.id}-${leg.side}-${leg.strike}`} variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>
+              {leg.side} {leg.optionType} {leg.strike} exp {leg.expiration} qty {leg.quantity}
+            </Typography>
+          ))}
+        </Paper>
+      ))}
+    </Stack>
+  );
+}
+
+function BrokerOpenPositions({ portfolio }: { portfolio: PortfolioState }) {
+  if (portfolio.kind !== 'ready') return <PortfolioGate state={portfolio} />;
+  const open = portfolio.data.positions.filter((position) => position.direction !== 'flat');
+  const grouped = new Set<string>();
+  const groups = portfolio.data.strategies.map((strategy) => {
+    const leg = confirmedShortLeg(strategy.performance.shortSymbols, portfolio.data.positions);
+    const long = open.find((position) => position.symbol === strategy.longSymbol) ?? null;
+    const short = leg.activeSymbol ? open.find((position) => position.symbol === leg.activeSymbol) ?? null : null;
+    if (long) grouped.add(long.id);
+    if (short) grouped.add(short.id);
+    return { id: strategy.id, underlying: strategy.underlying, long, short, closedShort: leg.closed };
+  });
+  const unresolved = portfolio.data.positions.filter((position) => position.status === 'unreconciled' || position.status === 'missing-opening').length;
+  const rest = open.filter((position) => !grouped.has(position.id));
+  const closedCount = portfolio.data.positions.filter((position) => position.direction === 'flat' && position.status !== 'unreconciled' && position.status !== 'missing-opening').length;
+  return (
+    <Stack spacing={1.5}>
+      {closedCount > 0 ? (
+        <Alert severity="info">
+          {closedCount} closed or zero-quantity contracts are in accounting history, not in this list.{' '}
+          <Link to="/broker">Review accounting history</Link>
+        </Alert>
+      ) : null}
+      {unresolved > 0 ? (
+        <Alert severity="warning">{unresolved} unresolved accounting {unresolved === 1 ? 'item is' : 'items are'} not listed as an open position. Review accounting history on Broker & Data.</Alert>
+      ) : null}
+      {open.length === 0 ? (
+        <Alert severity="info">
+          No open brokerage positions are imported. Connect tastytrade on Broker & Data, then use Import / Refresh Positions. Demo positions stay on the demo portfolio.
+        </Alert>
+      ) : null}
+      {groups.map((group) => (
+        <ConfirmedPmccCard key={group.id} group={group} />
+      ))}
+      {rest.map((position) => (
+        <Paper key={position.id} sx={{ p: 2 }}>
+          <OpenLeg position={position} role={position.direction === 'short' ? 'Short call' : 'Long LEAPS'} />
+        </Paper>
+      ))}
+    </Stack>
+  );
+}
+
+function ConfirmedPmccCard({ group }: { group: { id: string; underlying: string; long: PortfolioPosition | null; short: PortfolioPosition | null; closedShort: boolean } }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="h6">{group.underlying} confirmed PMCC</Typography>
+      <Typography variant="body2" color="text.secondary">One confirmed position. The long LEAPS and short call are not counted twice.</Typography>
+      {group.long ? <OpenLeg position={group.long} role="Long LEAPS" /> : <Typography variant="body2">Long LEAPS unavailable</Typography>}
+      {group.short ? <OpenLeg position={group.short} role="Short call" /> : group.closedShort ? (
+        <Typography variant="body2" sx={{ mt: 1 }}>The confirmed short call is closed. It stays in accounting history and was not replaced automatically.</Typography>
+      ) : <Typography variant="body2">Short call unavailable</Typography>}
+      <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => setOpen((value) => !value)}>
+        {open ? 'Hide PMCC details' : 'View PMCC details'}
+      </Button>
+      <Collapse in={open}>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Quote: {group.long ? `${group.long.quoteFreshness.replaceAll('_', ' ')}` : 'Long quote unavailable'}
+          {group.short ? ` · short ${group.short.quoteFreshness.replaceAll('_', ' ')}` : ' · short quote unavailable'}
         </Typography>
-        <PositionTable positions={portfolio.data.positions} emptyLabel="No brokerage contracts were reconstructed." />
+        <Typography variant="body2">Unrealized uses the imported mark when it is present. A missing quote stays labeled unavailable.</Typography>
+      </Collapse>
+    </Paper>
+  );
+}
+
+function OpenLeg({ position, role }: { position: PortfolioPosition; role: string }) {
+  const quote = position.mark ?? position.mid;
+  return (
+    <Stack spacing={0.5} sx={{ mt: 1 }}>
+      <Typography variant="subtitle2">{role}</Typography>
+      <Typography variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>{position.symbol}</Typography>
+      <Typography variant="body2">Strike {position.strike ?? 'Unavailable'} · exp {position.expiration ?? 'Unavailable'} · qty {position.openQuantity}</Typography>
+      <Typography variant="body2">Basis or credit: {formatMoney(position.direction === 'short' ? position.remainingBasis : position.entryCost)}</Typography>
+      <Typography variant="body2">Quote: {quote ?? 'Unavailable'} · {position.quoteFreshness}</Typography>
+      <Typography variant="body2">Unrealized: {formatMoney(position.unrealized)}</Typography>
+      <Button component={Link} to={`/positions/${position.id}`} size="small" sx={{ alignSelf: 'flex-start' }}>View Details</Button>
+    </Stack>
+  );
+}
+
+function SavedIdeasPanel({ signedIn }: { signedIn: boolean }) {
+  const [ideas, setIdeas] = useState<Array<{ id: string; kind: string; underlying: string; longOcc: string; shortOcc: string | null; quoteAsOf: string | null; notes: string; structureNote?: string }>>([]);
+  const [bookmarks, setBookmarks] = useState<Array<{ id: string; underlying: string; occSymbol: string; quoteAsOf: string | null }>>([]);
+  const [longOcc, setLongOcc] = useState('');
+  const [shortOcc, setShortOcc] = useState('');
+  const [underlying, setUnderlying] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!signedIn) return;
+    void fetchSavedIdeas().then((body) => setIdeas(body.ideas)).catch(() => setNotice('Saved ideas could not be loaded.'));
+    void fetchFinderBookmarks().then((body) => setBookmarks(body.bookmarks.map((row) => ({ id: row.id, underlying: row.underlying, occSymbol: row.occSymbol, quoteAsOf: row.quoteAsOf ?? null })))).catch(() => undefined);
+  }, [signedIn]);
+  if (!signedIn) return <Alert severity="info">Sign in to see saved research. Ideas are not brokerage positions.</Alert>;
+  return (
+    <Stack spacing={1.5}>
+      <Alert severity="info">Hypothetical research. These prices can be stale, and they are excluded from holdings and profit figures. Opening this list does not request new market data.</Alert>
+      {ideas.length === 0 && bookmarks.length === 0 ? (
+        <Alert severity="info">No saved ideas yet. Save a contract from Find One Stock or Explore Stocks, or enter both legs below.</Alert>
+      ) : null}
+      {bookmarks.map((row) => (
+        <Paper key={row.id} sx={{ p: 2 }}>
+          <Typography variant="subtitle2">Saved LEAPS Idea</Typography>
+          <Typography variant="body2">{row.underlying} · {row.occSymbol}</Typography>
+          <Typography variant="body2" color="text.secondary">Quote observation {row.quoteAsOf ?? 'Unavailable'}</Typography>
+        </Paper>
+      ))}
+      {ideas.map((row) => (
+        <Paper key={row.id} sx={{ p: 2 }}>
+          <Typography variant="subtitle2">
+            {row.kind === 'pmcc-setup' ? 'Saved PMCC Setup' : row.kind === 'reviewed-pair' ? 'Saved pair — not a conventional PMCC' : 'Saved LEAPS Idea'}
+          </Typography>
+          <Typography variant="body2">{row.underlying}</Typography>
+          <Typography variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>Long {row.longOcc}</Typography>
+          {row.shortOcc ? <Typography variant="body2" sx={{ fontFamily: 'var(--os-font-mono)' }}>Short {row.shortOcc}</Typography> : null}
+          <Typography variant="body2" color="text.secondary">{row.structureNote}</Typography>
+          <Typography variant="body2" color="text.secondary">Snapshot {row.quoteAsOf ?? 'Unavailable'}. {row.notes}</Typography>
+        </Paper>
+      ))}
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="subtitle2">Save a hypothetical setup</Typography>
+        <Stack spacing={1} sx={{ mt: 1 }}>
+          <TextField size="small" label="Underlying" value={underlying} onChange={(event) => setUnderlying(event.target.value)} />
+          <TextField size="small" label="Long LEAPS contract" value={longOcc} onChange={(event) => setLongOcc(event.target.value)} />
+          <TextField size="small" label="Short call contract, optional" value={shortOcc} onChange={(event) => setShortOcc(event.target.value)} helperText="Leave blank for a Saved LEAPS Idea. Both contracts are required for a Saved PMCC Setup. A long strike at or above the short strike is not labeled a conventional PMCC. Delta, intrinsic value, and profitability are not checked here." />
+          <Button variant="outlined" onClick={() => {
+            void createSavedIdea({ underlying, longOcc, shortOcc: shortOcc.trim() || undefined, quoteAsOf: new Date().toISOString() })
+              .then((created) => {
+                setIdeas((current) => [created, ...current]);
+                setNotice(created.kind === 'pmcc-setup' ? 'Saved PMCC Setup stored locally.' : created.kind === 'reviewed-pair' ? 'Saved pair stored locally. It is not a conventional PMCC.' : 'Saved LEAPS Idea stored locally.');
+              })
+              .catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not save the idea.'));
+          }}>Save idea</Button>
+          {notice ? <Alert severity="info">{notice}</Alert> : null}
+        </Stack>
       </Paper>
     </Stack>
   );
@@ -473,8 +630,8 @@ function StrategyCard({
   const performance = strategy.performance;
   const [showCalc, setShowCalc] = useState(false);
   const long = positions.find((row) => row.symbol === strategy.longSymbol);
-  const shortSymbol = performance.shortSymbols[0] ?? null;
-  const short = shortSymbol ? positions.find((row) => row.symbol === shortSymbol) : null;
+  const leg = confirmedShortLeg(strategy.performance.shortSymbols, positions);
+  const short = leg.activeSymbol ? positions.find((row) => row.symbol === leg.activeSymbol) ?? null : null;
   const shortPnl =
     performance.unrealized != null && performance.longUnrealized != null
       ? (Number(performance.unrealized) - Number(performance.longUnrealized)).toFixed(2)
@@ -491,7 +648,13 @@ function StrategyCard({
       </Typography>
       <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, mt: 1.5 }}>
         <LegPanel title="Long LEAPS" position={long} pnl={performance.longUnrealized} fallback={strategy.longSymbol} showDays />
-        <LegPanel title="Short call" position={short} pnl={shortPnl} fallback={shortSymbol ?? 'No open short linked'} showDays />
+        {short ? (
+          <LegPanel title="Short call" position={short} pnl={shortPnl} fallback="No open short linked" showDays />
+        ) : leg.closed ? (
+          <Alert severity="info" icon={false}>The confirmed short call is closed. It stays in accounting history and was not replaced automatically.</Alert>
+        ) : (
+          <LegPanel title="Short call" position={null} pnl={null} fallback="No open short linked" showDays />
+        )}
       </Box>
       {performance.combined != null ? (
         <Typography variant="h6" sx={{ mt: 1.75, color: !performance.complete || !quotesCurrent ? 'warning.main' : 'text.primary' }}>
@@ -666,5 +829,12 @@ function PortfolioGate({ state }: { state: Exclude<PortfolioState, { kind: 'read
     );
   }
   if (state.kind === 'signed-out') return <Alert severity="warning">Sign in on Broker & Data before imported positions are shown.</Alert>;
+  if (state.message.includes('Select an account')) {
+    return (
+      <Alert severity="info">
+        No brokerage positions are imported yet. Connect tastytrade on Broker & Data, then use Import / Refresh Positions. Demo positions are not shown in this view.
+      </Alert>
+    );
+  }
   return <Alert severity="error">{state.message}</Alert>;
 }

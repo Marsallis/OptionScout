@@ -1,4 +1,6 @@
 import type { AppConfig } from './config.js';
+import { resolveActiveConnection, type ActiveBrokerConnection } from './brokerage/connection.js';
+import { createAcceptanceFixture } from './brokerage/acceptance-fixture.js';
 import { brokerageBaseUrl, TastytradeClient, type BrokerageReadClient } from './brokerage/client.js';
 import type { BrokerRuntime } from './brokerage/status.js';
 import { openDatabase, type OpenedDatabase } from './db/client.js';
@@ -16,6 +18,7 @@ export interface AppContext {
   bootCount: number;
   providers: ProviderSet;
   brokerage: BrokerageReadClient | null;
+  brokerConnection: ActiveBrokerConnection;
   brokerRuntime: BrokerRuntime;
   /** Mocked chain/quote providers for route-level tests. Never set in production boot. */
   smartScanTestDeps?: Partial<Pick<SmartScanDeps, 'chainPayloadForTicker' | 'quoteSource' | 'now' | 'underlyingQuote' | 'claimHeartbeatMs'>>;
@@ -32,22 +35,49 @@ export async function openAppContext(config: AppConfig): Promise<AppContext> {
   const bootCount = incrementBootCount(database.db);
   const providers = createProviders(database.db);
   await providers.sync.syncAccount('acct_demo');
-  const brokerage =
-    config.liveEnabled && config.tastytrade && config.tastytradeEnvironment !== 'unset'
-      ? new TastytradeClient({
-          baseUrl: brokerageBaseUrl(config.tastytradeEnvironment),
-          credentials: config.tastytrade,
-        })
-      : null;
-  return {
+  const context: AppContext = {
     config,
     database,
     bootCount,
     providers,
-    brokerage,
+    brokerage: null,
+    brokerConnection: resolveActiveConnection({
+      db: database.db,
+      databasePath: config.databasePath,
+      legacySecretPath: config.secretFilePath,
+      liveEnabled: config.liveEnabled,
+      hardDisabled: config.hardDisabled,
+    }),
     brokerRuntime: { connectedThisProcess: false, lastError: null },
     close() {
       database.close();
     },
   };
+  refreshBrokerConnection(context);
+  return context;
+}
+
+export function refreshBrokerConnection(context: AppContext): ActiveBrokerConnection {
+  const active = resolveActiveConnection({
+    db: context.database.db,
+    databasePath: context.config.databasePath,
+    legacySecretPath: context.config.secretFilePath,
+    liveEnabled: context.config.liveEnabled,
+    hardDisabled: context.config.hardDisabled,
+  });
+  context.brokerConnection = active;
+  const useFixture = context.config.acceptanceFixture && context.config.nodeEnv !== 'production';
+  context.brokerage =
+    active.providerAllowed && active.credentials && active.environment !== 'unset'
+      ? useFixture
+        ? createAcceptanceFixture()
+        : new TastytradeClient({
+            baseUrl: brokerageBaseUrl(active.environment),
+            credentials: active.credentials,
+          })
+      : null;
+  if (!context.brokerage) {
+    context.brokerRuntime.connectedThisProcess = false;
+  }
+  return active;
 }

@@ -104,15 +104,25 @@ export function buildSnapshot(portfolio: Portfolio, todayIso = localDateIso()): 
     .filter((row) => row.days != null && row.days >= 0 && row.days <= 90)
     .sort((left, right) => (left.days ?? 9999) - (right.days ?? 9999))[0];
 
+  const activeStrategies = portfolio.strategies.filter((strategy) => {
+    const long = portfolio.positions.find((position) => position.symbol === strategy.longSymbol);
+    const shortSymbol = strategy.performance.shortSymbols[0];
+    const short = shortSymbol ? portfolio.positions.find((position) => position.symbol === shortSymbol) : undefined;
+    return long?.direction === 'long' && short?.direction === 'short';
+  }).length;
+  const historicalStrategies = portfolio.strategies.length - activeStrategies;
+  const strategyDetail = activeStrategies === 0 && historicalStrategies > 0
+    ? 'No open two-leg PMCC. A confirmed short that has been closed stays in history and is not counted. Unconfirmed shorts are not included.'
+    : activeStrategies === 1
+      ? '1 open two-leg PMCC. Open legs are counted separately below.'
+      : `${activeStrategies} open two-leg PMCCs. Unconfirmed pairs are not included.`;
+
   return [
     {
       id: 'strategies',
       label: 'Active strategies',
-      value: String(portfolio.strategies.length),
-      detail:
-        portfolio.strategies.length === 1
-          ? '1 confirmed PMCC. Open legs are counted separately below.'
-          : `${portfolio.strategies.length} confirmed PMCCs. Unconfirmed pairs are not included.`,
+      value: String(activeStrategies),
+      detail: strategyDetail,
       tone: 'neutral',
     },
     {
