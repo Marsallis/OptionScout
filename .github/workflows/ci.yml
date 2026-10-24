@@ -22,3 +22,14 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t optionscout:ci .
+      - name: Non-interactive setup
+        run: sh scripts/setup.sh --container optionscout-ci | tee /tmp/setup.out
+      - name: Success text uses the requested container name
+        run: grep -F 'optionscout-ci' /tmp/setup.out

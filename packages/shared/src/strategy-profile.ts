@@ -21,7 +21,7 @@ export const strategyHardRequirementsSchema = z
     maxContractCost: moneyText,
     minContractCost: moneyText.nullable().default(null),
     minLongDelta: decimalText,
-    minExpirationDays: z.number().int().positive(),
+    minExpirationDays: z.number().int().nonnegative(),
     maxExpirationDays: z.number().int().positive().nullable().default(null),
   })
   .strict();
@@ -129,8 +129,8 @@ export const STRATEGY_FIELD_HELP = {
     minExpirationDays: {
       label: 'Minimum days until expiration',
       unit: 'days',
-      help: 'Hard floor for LEAPS-style length. 365 ≈ one year.',
-      range: '30 – 2000',
+      help: 'Hard floor for length. 0 allows any expiration. 365 ≈ one year.',
+      range: '0 – 2000',
     },
     maxExpirationDays: {
       label: 'Maximum days until expiration (optional)',

@@ -138,7 +138,7 @@ export const finderCandidateSchema = z
             code: z.enum(MARKET_DATA_VALIDATION_CODES),
             severity: z.enum(['reject', 'warning', 'info']),
             message: z.string().min(1),
-            details: z.record(z.union([z.string(), z.number(), z.null()])).optional(),
+            details: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
           })
           .strict(),
       )
@@ -157,7 +157,7 @@ export const finderValidationCountersSchema = z
     strategyAssessed: z.number().int().nonnegative(),
     meetHardNumerical: z.number().int().nonnegative(),
     unevaluated: z.number().int().nonnegative(),
-    rejectionBreakdown: z.record(z.number().int().nonnegative()),
+    rejectionBreakdown: z.record(z.string(), z.number().int().nonnegative()),
   })
   .strict();
 
@@ -222,7 +222,7 @@ export const finderScanProgressSchema = z
     coverageSummary: z.string().min(1),
     selectionAlgorithm: z.string().min(1),
     plain: finderPlainProgressSchema,
-    rejectionBreakdown: z.record(z.number().int().nonnegative()).optional(),
+    rejectionBreakdown: z.record(z.string(), z.number().int().nonnegative()).optional(),
   })
   .strict();
 

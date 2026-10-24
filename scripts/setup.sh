@@ -54,15 +54,19 @@ while [ $# -gt 0 ]; do
 done
 
 PORT=${OPTIONSCOUT_PORT:-3180}
+CONTAINER=${OPTIONSCOUT_CONTAINER:-optionscout}
 
 printf '\nOptionScout is ready to start.\n'
 printf 'Demo mode does not need tastytrade credentials.\n'
 printf 'The published address will be http://127.0.0.1:%s\n\n' "$PORT"
-printf 'Start:\n  docker compose up -d --build\n\n'
-printf 'After the container is healthy, create your own passphrase (12 or more characters).\n'
-printf 'The prompt is masked. Do not put the passphrase in a file or on the command line.\n'
-printf '  docker compose exec -it optionscout node apps/api/dist/owner-setup.js\n\n'
-printf 'Then open http://127.0.0.1:%s and sign in on Broker & Data.\n' "$PORT"
+printf 'Start now with:\n  sh scripts/setup.sh --start\n'
+printf 'Or start later with:\n  docker compose up -d --build\n\n'
+printf 'The simulated Overview does not need a passphrase.\n'
+printf 'A passphrase is required for saved rules, bookmarks, and searches unless you set PUBLIC_SIMULATED_DEMO=true.\n'
+printf 'That flag serves only the simulated book, allows a DEMO search without sign-in, and still refuses orders and broker changes.\n'
+printf 'When you want a passphrase, use 12 or more characters. The prompt is masked. Do not put it in a file or on the command line.\n'
+printf '  docker exec -it %s node apps/api/dist/owner-setup.js\n\n' "$CONTAINER"
+printf 'Then open http://127.0.0.1:%s\n' "$PORT"
 
 if [ "$START" -eq 1 ]; then
   docker compose up -d --build || fail "Docker Compose did not start OptionScout. Run 'docker compose logs optionscout' in this directory."

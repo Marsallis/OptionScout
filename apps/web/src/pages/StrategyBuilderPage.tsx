@@ -25,23 +25,20 @@ import {
   setDefaultStrategyProfile,
   updateStrategyProfile,
 } from '../api/client';
+import { SectionNotice } from '../components/SectionNotice';
+import { parseMinExpirationDays, parseOptionalMoney, parseRequiredMoney } from '../lib/ruleFields';
 import { useAppState } from '../state/AppState';
 
-function moneyOrBlank(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  const normalized = /^\d+\.\d{2}$/.test(trimmed) ? trimmed : Number(trimmed).toFixed(2);
-  return normalized;
-}
-
 export function StrategyBuilderPage() {
-  const { session, status } = useAppState();
+  const { session, status, sessionError, retrySession } = useAppState();
   const [profiles, setProfiles] = useState<StrategyProfile[]>([]);
   const [selectedId, setSelectedId] = useState(SAL_PMCC_DEEP_ITM.id);
   const [draft, setDraft] = useState<StrategyProfile>(structuredClone(SAL_PMCC_DEEP_ITM));
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
+  const [spreadError, setSpreadError] = useState<string | null>(null);
+  const [minDaysError, setMinDaysError] = useState<string | null>(null);
 
   async function reload(): Promise<void> {
     const result = await fetchStrategyProfiles();
@@ -60,6 +57,9 @@ export function StrategyBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on auth only
   }, [session?.authenticated]);
 
+  if (status === 'error') {
+    return <SectionNotice title="Strategies are unavailable." message={sessionError ?? 'The session check failed.'} onRetry={retrySession} />;
+  }
   if (status === 'loading') {
     return (
       <Stack role="status" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
@@ -240,15 +240,19 @@ export function StrategyBuilderPage() {
           />
           <TextField
             label={STRATEGY_FIELD_HELP.hard.minExpirationDays.label}
-            helperText={STRATEGY_FIELD_HELP.hard.minExpirationDays.help}
             type="number"
             value={draft.hard.minExpirationDays}
-            onChange={(event) =>
+            error={Boolean(minDaysError)}
+            helperText={minDaysError ?? STRATEGY_FIELD_HELP.hard.minExpirationDays.help}
+            onChange={(event) => {
+              const parsed = parseMinExpirationDays(event.target.value);
+              setMinDaysError(parsed.error);
+              if (parsed.value == null) return;
               setDraft((current) => ({
                 ...current,
-                hard: { ...current.hard, minExpirationDays: Number(event.target.value) || current.hard.minExpirationDays },
-              }))
-            }
+                hard: { ...current.hard, minExpirationDays: parsed.value ?? current.hard.minExpirationDays },
+              }));
+            }}
             fullWidth
           />
         </Box>
@@ -299,61 +303,49 @@ export function StrategyBuilderPage() {
           />
           <TextField
             label={STRATEGY_FIELD_HELP.preferences.maxBidAskSpreadPercent.label}
-            helperText={STRATEGY_FIELD_HELP.preferences.maxBidAskSpreadPercent.help}
             value={draft.preferences.maxBidAskSpreadPercent ?? ''}
-            onChange={(event) =>
+            error={Boolean(spreadError)}
+            helperText={spreadError ?? STRATEGY_FIELD_HELP.preferences.maxBidAskSpreadPercent.help}
+            onChange={(event) => {
+              const parsed = parseOptionalMoney(event.target.value);
+              setSpreadError(parsed.error);
+              if (parsed.error) return;
               setDraft((current) => ({
                 ...current,
-                preferences: { ...current.preferences, maxBidAskSpreadPercent: moneyOrBlank(event.target.value) },
-              }))
-            }
-          />
-          <TextField
-            label={STRATEGY_FIELD_HELP.preferences.minOpenInterest.label}
-            helperText={`${STRATEGY_FIELD_HELP.preferences.minOpenInterest.help} Not available yet for most Finder quotes.`}
-            value={draft.preferences.minOpenInterest ?? ''}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                preferences: {
-                  ...current.preferences,
-                  minOpenInterest: event.target.value.trim() === '' ? null : Number(event.target.value),
-                },
-              }))
-            }
-          />
-          <TextField
-            label={STRATEGY_FIELD_HELP.preferences.minVolume.label}
-            helperText={`${STRATEGY_FIELD_HELP.preferences.minVolume.help} Not available yet when the provider omits volume.`}
-            value={draft.preferences.minVolume ?? ''}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                preferences: {
-                  ...current.preferences,
-                  minVolume: event.target.value.trim() === '' ? null : Number(event.target.value),
-                },
-              }))
-            }
-          fullWidth
+                preferences: { ...current.preferences, maxBidAskSpreadPercent: parsed.value },
+              }));
+            }}
           />
         </Box>
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Open interest and volume stay off this form. Finder quotes cannot score them yet, so a save clears any stored minimum instead of treating a blank as a pass.
+        </Alert>
         <Button
           sx={{ mt: 2 }}
           variant="contained"
-          disabled={busy}
+          disabled={busy || Boolean(spreadError) || Boolean(minDaysError)}
           onClick={() =>
             void withBusy(async () => {
+              const maxCost = parseRequiredMoney(draft.hard.maxContractCost, 'Maximum contract cost');
+              const ideal = parseRequiredMoney(draft.preferences.idealContractCost, 'Ideal purchase cost');
+              const days = parseMinExpirationDays(String(draft.hard.minExpirationDays));
+              if (maxCost.error || ideal.error || days.error || maxCost.value == null || ideal.value == null || days.value == null) {
+                setNotice(maxCost.error ?? ideal.error ?? days.error ?? 'Check the highlighted amounts.');
+                return;
+              }
               const saved = await updateStrategyProfile(selectedId, {
                 ...draft,
                 name: draft.name,
                 hard: {
                   ...draft.hard,
-                  maxContractCost: Number(draft.hard.maxContractCost).toFixed(2),
+                  maxContractCost: maxCost.value,
+                  minExpirationDays: days.value,
                 },
                 preferences: {
                   ...draft.preferences,
-                  idealContractCost: Number(draft.preferences.idealContractCost).toFixed(2),
+                  idealContractCost: ideal.value,
+                  minOpenInterest: null,
+                  minVolume: null,
                 },
               });
               setDraft(structuredClone(saved));

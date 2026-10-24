@@ -57,6 +57,7 @@ import { DiscoverResultsSection } from '../components/DiscoverResultsSection';
 import { SuccessToast } from '../brand/SuccessToast';
 import { SmartScanProgressPanel } from '../components/SmartScanProgressPanel';
 import { RecentSearchesPanel } from '../components/RecentSearchesPanel';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 import { useResearchWorkspace } from '../state/ResearchWorkspace';
 
@@ -140,7 +141,7 @@ function diagnosticBlockedTickers(tickers: string[], policy: SmartScanPolicy | n
 }
 
 export function DiscoverOpportunitiesPage() {
-  const { status, session, error, settings, broker } = useAppState();
+  const { status, session, error, settings, broker, retrySession } = useAppState();
   const research = useResearchWorkspace();
   const [profiles, setProfiles] = useState<StrategyProfile[]>([SAL_PMCC_DEEP_ITM]);
   const [profilesFromServer, setProfilesFromServer] = useState(false);
@@ -676,7 +677,7 @@ export function DiscoverOpportunitiesPage() {
     return <Typography>Loading Explore Stocks.</Typography>;
   }
   if (status === 'error') {
-    return <Alert severity="error">{error ?? 'API unavailable.'}</Alert>;
+    return <SectionNotice title="Explore Stocks is unavailable." message={error ?? 'The session check failed.'} onRetry={retrySession} />;
   }
 
   return (
@@ -847,7 +848,7 @@ export function DiscoverOpportunitiesPage() {
                 await reloadUniverses();
                 setDirectoryId(saved.id);
                 setSelectedUniverseId(saved.id);
-                setSelectedTickers([]);
+                setSelectedTickers(saved.tickers.slice(0, maxSelectable));
                 setNotice(`${saved.tickers.length} companies are in the picker. Check up to ${maxSelectable}.`);
               }).catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not save those symbols.'));
             }}

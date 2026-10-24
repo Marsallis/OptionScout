@@ -30,15 +30,18 @@ import { Wordmark } from '../brand/Wordmark';
 import { brand } from '../brand/tokens';
 import { AdviceNote } from '../components/AdviceNote';
 import { DemoBanner } from '../components/DemoBanner';
-import { NAV_ITEMS, PLACEHOLDERS } from '../content/pages';
+import { NAV_ITEMS } from '../content/pages';
 import { BrokerPage } from '../pages/BrokerPage';
 import { PositionDetailPage, PositionsPage } from '../pages/BrokeragePages';
 import { DiscoverOpportunitiesPage } from '../pages/DiscoverOpportunitiesPage';
 import { LeapsFinderPage } from '../pages/LeapsFinderPage';
 import { OverviewPage } from '../pages/OverviewPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { PmccBuilderPage } from '../pages/PmccBuilderPage';
+import { ResearchFeedPage } from '../pages/ResearchFeedPage';
+import { RiskLabPage } from '../pages/RiskLabPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { StrategyBuilderPage } from '../pages/StrategyBuilderPage';
+import { TradeJournalPage } from '../pages/TradeJournalPage';
 
 const DRAWER_WIDTH = 272;
 
@@ -59,7 +62,7 @@ const NAV_ICONS: Record<string, typeof HomeOutlinedIcon> = {
 const NAV_GROUPS: Array<{ label: string; paths: string[] }> = [
   { label: 'Research', paths: ['/', '/leaps', '/discover', '/strategies'] },
   { label: 'Portfolio', paths: ['/positions', '/broker', '/settings'] },
-  { label: 'Planned', paths: ['/pmcc', '/risk', '/research', '/journal'] },
+  { label: 'Desk', paths: ['/pmcc', '/risk', '/research', '/journal'] },
 ];
 
 function ThemeToggle() {
@@ -205,9 +208,10 @@ export function AppShell() {
             <Route path="/positions" element={<PositionsPage />} />
             <Route path="/broker" element={<BrokerPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            {Object.entries(PLACEHOLDERS).map(([path, copy]) => (
-              <Route key={path} path={path} element={<PlaceholderPage {...copy} />} />
-            ))}
+            <Route path="/pmcc" element={<PmccBuilderPage />} />
+            <Route path="/risk" element={<RiskLabPage />} />
+            <Route path="/research" element={<ResearchFeedPage />} />
+            <Route path="/journal" element={<TradeJournalPage />} />
           </Routes>
         </Box>
       </Box>

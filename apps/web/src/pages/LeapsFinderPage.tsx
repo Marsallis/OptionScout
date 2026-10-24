@@ -83,6 +83,7 @@ import { CompareTray } from '../components/CompareTray';
 import { ContractComparisonPanel } from '../components/ContractComparisonPanel';
 import { ContractReviewPanel } from '../components/ContractReviewPanel';
 import { PmccExplainer } from '../components/PmccExplainer';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 import { useResearchWorkspace } from '../state/ResearchWorkspace';
 import { RecentSearchesPanel } from '../components/RecentSearchesPanel';
@@ -170,7 +171,7 @@ function isSimulatedBookmark(bookmark: FinderBookmark): boolean {
 }
 
 export function LeapsFinderPage() {
-  const { status, session, error, settings, broker } = useAppState();
+  const { status, session, error, settings, broker, retrySession } = useAppState();
   const research = useResearchWorkspace();
   const [ticker, setTicker] = useState(() => {
     try {
@@ -248,6 +249,7 @@ export function LeapsFinderPage() {
   const deltaFieldError = deltaValidation.ok ? null : deltaValidation.error;
   const searchState = resolveFinderSearchState({
     authenticated: session?.authenticated === true,
+    publicSimulatedDemo: session?.publicSimulatedDemo === true,
     portfolioView: settings?.portfolioView === 'brokerage' ? 'brokerage' : 'demo',
     ticker,
     deltaInvalid: Boolean(deltaFieldError),
@@ -271,7 +273,8 @@ export function LeapsFinderPage() {
   }, [deltaValidation]);
 
   useEffect(() => {
-    if (!session?.authenticated) {
+    const researchReady = session?.authenticated === true || session?.publicSimulatedDemo === true;
+    if (!researchReady) {
       setBookmarks([]);
       setBookmarkWarnings([]);
       setProfiles([SAL_PMCC_DEEP_ITM]);
@@ -297,7 +300,7 @@ export function LeapsFinderPage() {
         setProfiles([SAL_PMCC_DEEP_ITM]);
         setProfilesFromServer(false);
       });
-  }, [session?.authenticated]);
+  }, [session?.authenticated, session?.publicSimulatedDemo]);
 
   const activeProfile = profiles.find((row) => row.id === profileId) ?? profiles[0] ?? SAL_PMCC_DEEP_ITM;
   const scanProfile =
@@ -415,7 +418,7 @@ export function LeapsFinderPage() {
   }
 
   if (status === 'error') {
-    return <Alert severity="error">{error ?? 'LEAPS Finder is unavailable.'}</Alert>;
+    return <SectionNotice title="Find One Stock is unavailable." message={error ?? 'The session check failed.'} onRetry={retrySession} />;
   }
 
   async function runSearch(): Promise<void> {

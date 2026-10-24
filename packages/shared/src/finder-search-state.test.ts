@@ -19,6 +19,22 @@ describe('finder search state', () => {
     expect(state.primaryHref).toBe('/broker');
   });
 
+  it('lets a public simulated demo search DEMO without an owner session', () => {
+    const state = resolveFinderSearchState({
+      authenticated: false,
+      publicSimulatedDemo: true,
+      portfolioView: 'demo',
+      ticker: 'DEMO',
+      deltaInvalid: false,
+      busy: false,
+      finderLiveScanInstallAllowed: false,
+      finderOnDemandSearchEnabled: false,
+      brokerageLiveConfigured: false,
+    });
+    expect(state.canSearch).toBe(true);
+    expect(state.blocker).toBe('ready-demo');
+  });
+
   it('blocks real tickers in demo mode with a settings path', () => {
     const state = resolveFinderSearchState({
       authenticated: true,

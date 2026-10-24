@@ -14,6 +14,8 @@ const complete = {
 describe('Sal PMCC profile', () => {
   it('stores the deep ITM defaults and does not treat 0.60 delta as a match', () => {
     expect(strategyProfileSchema.parse(SAL_PMCC_DEEP_ITM).name).toBe('Sal PMCC — Deep ITM');
+    expect(strategyProfileSchema.parse({ ...SAL_PMCC_DEEP_ITM, hard: { ...SAL_PMCC_DEEP_ITM.hard, minExpirationDays: 0 } }).hard.minExpirationDays).toBe(0);
+    expect(strategyProfileSchema.safeParse({ ...SAL_PMCC_DEEP_ITM, hard: { ...SAL_PMCC_DEEP_ITM.hard, minExpirationDays: -1 } }).success).toBe(false);
     expect(SAL_PMCC_DEEP_ITM.references).toEqual([]);
     const configured = {
       ...SAL_PMCC_DEEP_ITM,

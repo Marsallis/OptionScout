@@ -324,6 +324,7 @@ export const sessionViewSchema = z
     ownerConfigured: z.boolean(),
     expiresAt: z.string().datetime().nullable(),
     csrfToken: z.string().nullable(),
+    publicSimulatedDemo: z.boolean().default(false),
   })
   .strict();
 
@@ -459,6 +460,7 @@ export const healthSchema = z
     liveEnabled: z.boolean(),
     scheduledSyncEnabled: z.literal(false),
     ownerConfigured: z.boolean(),
+    publicSimulatedDemo: z.boolean().default(false),
   })
   .strict();
 

@@ -220,6 +220,20 @@ export const strategyGroups = sqliteTable('strategy_groups', {
   createdAt: text('created_at').notNull(),
 });
 
+export const tradeJournal = sqliteTable('trade_journal', {
+  id: text('id').primaryKey(),
+  entryDate: text('entry_date').notNull(),
+  ticker: text('ticker').notNull(),
+  strategy: text('strategy').notNull(),
+  entryPremium: text('entry_premium').notNull(),
+  exitPremium: text('exit_premium'),
+  notes: text('notes').notNull(),
+  tags: text('tags').notNull(),
+  outcome: text('outcome').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const savedPmccIdeas = sqliteTable('saved_pmcc_ideas', {
   id: text('id').primaryKey(),
   underlying: text('underlying').notNull(),

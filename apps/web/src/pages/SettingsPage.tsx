@@ -11,17 +11,18 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { useColorMode } from '../brand/ColorMode';
 import { DemoChip } from '../components/DemoChip';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 
 export function SettingsPage() {
-  const { status, error, settings, session, savePreferences } = useAppState();
+  const { settingsStatus, settingsError, settings, session, savePreferences, retrySettings } = useAppState();
   const { mode, setMode } = useColorMode();
   const [message, setMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated);
 
-  if (status === 'loading' || !settings) {
-    if (status === 'error') {
-      return <Alert severity="error">{error ?? 'Settings are unavailable.'}</Alert>;
+  if (settingsStatus === 'loading' || !settings) {
+    if (settingsStatus === 'error') {
+      return <SectionNotice title="Settings are unavailable." message={settingsError ?? 'The settings request failed.'} onRetry={retrySettings} />;
     }
     return (
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 4 }}>

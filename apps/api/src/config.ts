@@ -42,6 +42,8 @@ export interface AppConfig {
   secretFilePath: string;
   secretFileComplete: boolean;
   tastytrade: TastytradeCredentials | null;
+  /** Opt-in. Simulated book only. Research from a non-loopback host. No broker credentials. */
+  publicSimulatedDemo: boolean;
 }
 
 const CREDENTIAL_KEYS = [
@@ -148,6 +150,7 @@ const configSchema = z
     SMART_SCAN_LIVE: z.string().trim().default('false'),
     TASTYTRADE_SCHEDULED_SYNC: z.string().trim().default('false'),
     TASTYTRADE_TRANSACTION_LOOKBACK_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    PUBLIC_SIMULATED_DEMO: z.string().trim().default('false'),
   })
   .superRefine((value, context) => {
     if (value.DATA_MODE !== 'demo') {
@@ -227,6 +230,13 @@ const configSchema = z
         path: ['DXLINK_LIVE_DIAGNOSTIC'],
       });
     }
+    if (value.PUBLIC_SIMULATED_DEMO !== 'true' && value.PUBLIC_SIMULATED_DEMO !== 'false') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PUBLIC_SIMULATED_DEMO must be "true" or "false".',
+        path: ['PUBLIC_SIMULATED_DEMO'],
+      });
+    }
     if (value.RUNNING_IN_DOCKER !== 'true' && value.RUNNING_IN_DOCKER !== 'false') {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -286,6 +296,7 @@ export function parseConfig(
     SMART_SCAN_LIVE: env.SMART_SCAN_LIVE,
     TASTYTRADE_SCHEDULED_SYNC: env.TASTYTRADE_SCHEDULED_SYNC,
     TASTYTRADE_TRANSACTION_LOOKBACK_DAYS: env.TASTYTRADE_TRANSACTION_LOOKBACK_DAYS,
+    PUBLIC_SIMULATED_DEMO: env.PUBLIC_SIMULATED_DEMO,
   });
 
   if (!parsed.success) {
@@ -293,9 +304,10 @@ export function parseConfig(
     throw new ConfigError(message);
   }
 
-  const secretValues = readSecretFile(secretFilePath);
+  const publicSimulatedDemo = parsed.data.PUBLIC_SIMULATED_DEMO === 'true';
+  const secretValues = publicSimulatedDemo ? null : readSecretFile(secretFilePath);
   const complete = secretComplete(secretValues);
-  const liveEnabled = parsed.data.TASTYTRADE_ENABLE_LIVE === 'true';
+  const liveEnabled = !publicSimulatedDemo && parsed.data.TASTYTRADE_ENABLE_LIVE === 'true';
   if (liveEnabled && !complete) {
     throw new ConfigError('TASTYTRADE_ENABLE_LIVE is true, but the brokerage secret file is missing or incomplete.');
   }
@@ -322,16 +334,17 @@ export function parseConfig(
     runningInDocker: parsed.data.RUNNING_IN_DOCKER === 'true',
     staticDir,
     liveEnabled,
-    hardDisabled: parsed.data.TASTYTRADE_DISABLE_LIVE === 'true',
-    acceptanceFixture: parsed.data.NODE_ENV !== 'production' && parsed.data.TASTYTRADE_ACCEPTANCE_FIXTURE === 'true',
-    dxlinkLiveDiagnostic: parsed.data.DXLINK_LIVE_DIAGNOSTIC === 'true',
-    finderLiveScan: parsed.data.FINDER_LIVE_SCAN === 'true',
-    smartScanLive: parsed.data.SMART_SCAN_LIVE === 'true',
+    hardDisabled: parsed.data.TASTYTRADE_DISABLE_LIVE === 'true' || publicSimulatedDemo,
+    acceptanceFixture: !publicSimulatedDemo && parsed.data.NODE_ENV !== 'production' && parsed.data.TASTYTRADE_ACCEPTANCE_FIXTURE === 'true',
+    dxlinkLiveDiagnostic: !publicSimulatedDemo && parsed.data.DXLINK_LIVE_DIAGNOSTIC === 'true',
+    finderLiveScan: !publicSimulatedDemo && parsed.data.FINDER_LIVE_SCAN === 'true',
+    smartScanLive: !publicSimulatedDemo && parsed.data.SMART_SCAN_LIVE === 'true',
     scheduledSyncEnabled: false,
     tastytradeEnvironment: secretEnvironment(secretValues),
     transactionLookbackDays: parsed.data.TASTYTRADE_TRANSACTION_LOOKBACK_DAYS,
     secretFilePath,
     secretFileComplete: complete,
-    tastytrade: credentials,
+    tastytrade: publicSimulatedDemo ? null : credentials,
+    publicSimulatedDemo,
   };
 }

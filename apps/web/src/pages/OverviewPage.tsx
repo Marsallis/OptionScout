@@ -16,6 +16,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { DemoChip } from '../components/DemoChip';
+import { SectionNotice } from '../components/SectionNotice';
 import { MetricCard } from '../components/MetricCard';
 import { formatAction, formatDate, formatSignedUsd, formatSnapshot, formatUsd, pnlColor } from '../lib/format';
 import { useAppState } from '../state/AppState';
@@ -24,10 +25,10 @@ import { BrokerageOverview } from './BrokeragePages';
 const SHORT_CALL_ACTIONS = new Set(['sell_to_open', 'buy_to_close', 'sell_to_close', 'expire']);
 
 export function OverviewPage() {
-  const { status, error, dashboard, settings } = useAppState();
+  const { dashboardStatus, dashboardError, dashboard, settings, settingsError, retryDashboard, retrySettings } = useAppState();
   const [showLedger, setShowLedger] = useState(false);
 
-  if (status === 'loading') {
+  if (dashboardStatus === 'loading') {
     return (
       <Stack role="status" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
         <CircularProgress size={28} />
@@ -36,13 +37,8 @@ export function OverviewPage() {
     );
   }
 
-  if (status === 'error' || !dashboard) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        <Typography variant="subtitle2">The demo book did not load.</Typography>
-        <Typography variant="body2">{error ?? 'The demo dashboard is unavailable.'}</Typography>
-      </Alert>
-    );
+  if (dashboardStatus === 'error' || !dashboard) {
+    return <SectionNotice title="The demo book did not load." message={dashboardError ?? 'The demo dashboard is unavailable.'} onRetry={retryDashboard} />;
   }
 
   if (settings?.portfolioView === 'brokerage') {
@@ -69,6 +65,7 @@ export function OverviewPage() {
         <DemoChip />
       </Stack>
 
+      {settingsError ? <SectionNotice title="Settings did not load." message={settingsError} onRetry={retrySettings} /> : null}
       <Paper data-testid="home-intro" sx={{ p: { xs: 2, md: 3 }, backgroundImage: 'none' }}>
         <Typography variant="overline" color="primary.main">
           What OptionScout does

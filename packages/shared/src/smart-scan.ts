@@ -93,17 +93,17 @@ export const discoveryUniverseSchema = z
     sourceLabel: z.string().min(1),
     retrievedAt: z.string().min(1),
     tickers: z.array(z.string().min(1).max(12)).min(1),
-    companyNames: z.record(z.string()).default({}),
+    companyNames: z.record(z.string(), z.string()).default({}),
     /** Sector labels from the imported file, when that column existed. */
-    sectors: z.record(z.string()).default({}),
+    sectors: z.record(z.string(), z.string()).default({}),
     /** Provider holdings weights as text, exactly as imported. Not a performance score. */
-    weights: z.record(z.string()).default({}),
+    weights: z.record(z.string(), z.string()).default({}),
     /** How the weight column was read. Older versions stay unspecified and are not reinterpreted. */
     weightReading: z
       .enum(['percent-sign', 'percentage-points', 'decimal-fraction', 'ambiguous', 'missing', 'unspecified'])
       .default('unspecified'),
     /** Interpreted percent of the fund, such as "7.1" for 7.1%. Empty when the scale was not known. */
-    weightPercents: z.record(z.string()).default({}),
+    weightPercents: z.record(z.string(), z.string()).default({}),
     editable: z.boolean(),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
@@ -204,7 +204,7 @@ export const smartScanProgressSchema = z
     validatedOk: z.number().int().nonnegative().optional(),
     strategyAssessed: z.number().int().nonnegative().optional(),
     meetHardNumerical: z.number().int().nonnegative().optional(),
-    rejectionBreakdown: z.record(z.number().int().nonnegative()).optional(),
+    rejectionBreakdown: z.record(z.string(), z.number().int().nonnegative()).optional(),
   })
   .strict();
 
@@ -237,7 +237,7 @@ export const smartScanRequestSchema = z
       .default(SMART_SCAN_DEFAULT_BUDGET),
     scanPriority: z.enum(SCAN_MORE_PRIORITIES).default('closest-to-strategy'),
     tolerances: discoveryToleranceSchema.optional(),
-    companyNames: z.record(z.string()).optional(),
+    companyNames: z.record(z.string(), z.string()).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

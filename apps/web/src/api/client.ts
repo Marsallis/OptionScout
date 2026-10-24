@@ -45,6 +45,12 @@ import {
   type ResearchUiPrefs,
   researchRestoreSchema,
   researchSessionListSchema,
+  demoChainSchema,
+  tradeJournalEntrySchema,
+  tradeJournalListSchema,
+  type DemoChain,
+  type TradeJournalEntry,
+  type TradeJournalWrite,
 } from '@optionscout/shared';
 import { z } from 'zod';
 
@@ -528,7 +534,7 @@ const holdingsPreviewResponseSchema = z
   .object({
     headers: z.array(z.string()),
     headerLine: z.number(),
-    mapping: z.record(z.enum(['ticker', 'name', 'sector', 'weight', 'assetClass', 'ignore'])),
+    mapping: z.record(z.string(), z.enum(['ticker', 'name', 'sector', 'weight', 'assetClass', 'ignore'])),
     rows: z.array(
       z
         .object({
@@ -616,6 +622,37 @@ export function commitHoldingsCsvImport(body: {
       ),
     },
   );
+}
+
+export function fetchDemoChain(): Promise<DemoChain> {
+  return requestJson('/api/research/demo-chain', demoChainSchema);
+}
+
+export function fetchTradeJournal(): Promise<{ entries: TradeJournalEntry[]; summary: { count: number; wins: number; losses: number; open: number; scratch: number; winRate: string | null; totalEstimatedPnl: string } }> {
+  return requestJson('/api/journal', tradeJournalListSchema);
+}
+
+export function createTradeJournalEntry(body: TradeJournalWrite): Promise<TradeJournalEntry> {
+  return requestJson('/api/journal', tradeJournalEntrySchema, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateTradeJournalEntry(id: string, body: TradeJournalWrite): Promise<TradeJournalEntry> {
+  return requestJson(`/api/journal/${encodeURIComponent(id)}`, tradeJournalEntrySchema, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteTradeJournalEntry(id: string): Promise<void> {
+  const headers = new Headers();
+  if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+  const response = await fetch(`/api/journal/${encodeURIComponent(id)}`, { method: 'DELETE', headers, credentials: 'include' });
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export function retrySmartScanCompanies(

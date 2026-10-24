@@ -14,17 +14,18 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { chooseBrokerAccount, disconnectBroker, fetchPortfolio, saveBrokerCredentials, testBrokerConnection } from '../api/client';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 
 export function BrokerPage() {
-  const { status, error, broker, session, signIn, signOut, syncNow, chooseAccount, applyBroker } = useAppState();
+  const { brokerStatus, brokerError, broker, session, sessionError, signIn, signOut, syncNow, chooseAccount, applyBroker, retryBroker, retrySession } = useAppState();
   const [passphrase, setPassphrase] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTone, setNoticeTone] = useState<'info' | 'warning' | 'success'>('info');
   const [busy, setBusy] = useState(false);
   const [backfillStart, setBackfillStart] = useState('');
 
-  if (status === 'loading') {
+  if (brokerStatus === 'loading') {
     return (
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 4 }}>
         <CircularProgress size={22} />
@@ -33,8 +34,8 @@ export function BrokerPage() {
     );
   }
 
-  if (status === 'error' || !broker) {
-    return <Alert severity="error">{error ?? 'Broker status is unavailable.'}</Alert>;
+  if (brokerStatus === 'error' || !broker) {
+    return <SectionNotice title="Broker status is unavailable." message={brokerError ?? 'The broker status request failed.'} onRetry={retryBroker} />;
   }
 
   async function submitLogin(): Promise<void> {
@@ -74,6 +75,7 @@ export function BrokerPage() {
       <Typography variant="h4" component="h1">
         Broker & Data
       </Typography>
+      {sessionError ? <SectionNotice title="Sign-in status did not load." message={sessionError} onRetry={retrySession} /> : null}
       <Alert severity="info" icon={false}>
         {broker.disclaimer} Read-only access only. Order routing stays off. A local file is not encryption, and a Docker data-volume backup can include the credential file.
       </Alert>

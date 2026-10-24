@@ -98,6 +98,7 @@ describe('Discover Opportunities page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     mocks.appState.settings = { ...settingsFixture, portfolioView: 'brokerage' };
     mocks.appState.broker = brokerFixture;
