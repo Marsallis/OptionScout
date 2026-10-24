@@ -58,4 +58,20 @@ describe('beginner desk appearance', () => {
     expect(document.documentElement).toHaveAttribute('data-experience', 'pro');
     expect(screen.queryByRole('region', { name: 'Welcome guide' })).not.toBeInTheDocument();
   });
+
+  it('keeps a typed symbol on the watchlist', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Add a symbol' }), 'AAPL');
+    await user.click(screen.getByRole('button', { name: 'Add symbol' }));
+    const watchlist = screen.getByRole('region', { name: 'Watchlist' });
+    expect(await within(watchlist).findByRole('button', { name: 'Remove AAPL' })).toBeInTheDocument();
+    expect(within(watchlist).getByText('AAPL')).toBeInTheDocument();
+    expect(within(watchlist).queryByText(/No symbols yet/)).not.toBeInTheDocument();
+  });
 });
