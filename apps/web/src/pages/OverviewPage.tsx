@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import type { Dashboard } from '@optionscout/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -28,15 +29,20 @@ export function OverviewPage() {
 
   if (status === 'loading') {
     return (
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 4 }}>
-        <CircularProgress size={22} />
+      <Stack role="status" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+        <CircularProgress size={28} />
         <Typography>Loading the demo dashboard.</Typography>
       </Stack>
     );
   }
 
   if (status === 'error' || !dashboard) {
-    return <Alert severity="error">{error ?? 'The demo dashboard is unavailable.'}</Alert>;
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        <Typography variant="subtitle2">The demo book did not load.</Typography>
+        <Typography variant="body2">{error ?? 'The demo dashboard is unavailable.'}</Typography>
+      </Alert>
+    );
   }
 
   if (settings?.portfolioView === 'brokerage') {
@@ -62,6 +68,54 @@ export function OverviewPage() {
         </Box>
         <DemoChip />
       </Stack>
+
+      <Paper data-testid="home-intro" sx={{ p: { xs: 2, md: 3 }, backgroundImage: 'none' }}>
+        <Typography variant="overline" color="primary.main">
+          What OptionScout does
+        </Typography>
+        <Typography variant="h5" component="h2" sx={{ mt: 0.75, maxWidth: 720 }}>
+          Compare long-dated calls with rules you saved.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 760 }}>
+          This home view is the simulated book: fictional positions, prices, and alerts so you can learn the desk before connecting a
+          brokerage. Searches stay on your computer. Matching a rule is never a claim that a trade is profitable.
+        </Typography>
+        <Box
+          sx={{
+            mt: 2,
+            display: 'grid',
+            gap: 1.5,
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+          }}
+        >
+          <IntroStep
+            step="1"
+            title="Read the book"
+            body="Overview shows capital, unrealized marks, and upcoming expirations from the demo fixtures."
+          />
+          <IntroStep
+            step="2"
+            title="Check one chain"
+            body="Find One Stock evaluates the fictional DEMO ticker against your saved hard rules and preferences."
+          />
+          <IntroStep
+            step="3"
+            title="Compare a list"
+            body="Explore Stocks groups best and near matches. Best means every assessed rule passed."
+          />
+        </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
+          <Button variant="contained" component={RouterLink} to="/leaps">
+            Start with one ticker
+          </Button>
+          <Button variant="outlined" component={RouterLink} to="/discover">
+            Compare several companies
+          </Button>
+          <Button variant="outlined" component={RouterLink} to="/strategies">
+            Edit investing rules
+          </Button>
+        </Stack>
+      </Paper>
 
       <Alert severity="info" icon={false}>
         Positions currently held, capital at work, and risk-review alerts. Matching a strategy or filter is never a claim that a trade is
@@ -351,6 +405,22 @@ export function OverviewPage() {
         </Panel>
       </Box>
     </Stack>
+  );
+}
+
+function IntroStep({ step, title, body }: { step: string; title: string; body: string }) {
+  return (
+    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', minWidth: 0 }}>
+      <Typography variant="caption" color="primary.main" sx={{ fontWeight: 800 }}>
+        {step}
+      </Typography>
+      <Typography variant="subtitle2" sx={{ mt: 0.25 }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {body}
+      </Typography>
+    </Box>
   );
 }
 

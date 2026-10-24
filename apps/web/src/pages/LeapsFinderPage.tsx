@@ -1087,7 +1087,23 @@ export function LeapsFinderPage() {
               <Stack spacing={2.5}>
                 {strategyGroups.map((group) => (
                   <Box key={group.id}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 650, mb: 1 }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: 700,
+                        mb: 1.25,
+                        pl: 1.25,
+                        borderLeft: '4px solid',
+                        borderColor:
+                          group.id === 'eligible-all-prefs-met'
+                            ? 'success.main'
+                            : group.id === 'eligible-preference-differences'
+                              ? 'warning.main'
+                              : group.id === 'invalid-data'
+                                ? 'error.main'
+                                : 'text.disabled',
+                      }}
+                    >
                       {group.label} ({group.candidates.length})
                     </Typography>
                     <Box

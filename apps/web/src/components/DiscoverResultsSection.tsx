@@ -265,11 +265,28 @@ export function DiscoverResultsSection({
         </Typography>
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderLeft: '4px solid', borderLeftColor: beginnerGroup === 'near-matches' ? 'warning.main' : beginnerGroup === 'best-matches' ? 'success.main' : 'divider' }}>
+        <Typography variant="subtitle2">
+          {beginnerGroup === 'best-matches'
+            ? 'Best Matches'
+            : beginnerGroup === 'near-matches'
+              ? 'Near Matches'
+              : beginnerGroup === 'need-more-data'
+                ? 'Need More Data'
+                : 'All evaluated contracts'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Best Matches passed every configured hard rule and every preference that could be assessed. Near Matches passed the hard
+          rules and missed a preference. A wide bid/ask spread is a warning on the card. It does not change the group.
+        </Typography>
+      </Paper>
+
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
         <ToggleButtonGroup
           exclusive
           size="small"
           value={beginnerGroup}
+          sx={{ flexWrap: 'wrap' }}
           onChange={(_event, value: BeginnerDiscoveryGroup | 'all' | null) => {
             if (value) setBeginnerGroup(value);
           }}

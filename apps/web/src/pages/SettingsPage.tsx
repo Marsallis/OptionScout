@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Paper from '@mui/material/Paper';
@@ -8,11 +9,13 @@ import RadioGroup from '@mui/material/RadioGroup';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
+import { useColorMode } from '../brand/ColorMode';
 import { DemoChip } from '../components/DemoChip';
 import { useAppState } from '../state/AppState';
 
 export function SettingsPage() {
   const { status, error, settings, session, savePreferences } = useAppState();
+  const { mode, setMode } = useColorMode();
   const [message, setMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated);
 
@@ -37,9 +40,20 @@ export function SettingsPage() {
         <DemoChip />
       </Stack>
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
-        <Typography variant="h6">Display</Typography>
+        <Typography variant="h6">Appearance</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          These preferences are stored in the local SQLite database.
+          Light and dark stay in this browser. Density and Greeks are stored in the local SQLite database.
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
+          <Button variant={mode === 'light' ? 'contained' : 'outlined'} onClick={() => setMode('light')}>
+            Light
+          </Button>
+          <Button variant={mode === 'dark' ? 'contained' : 'outlined'} onClick={() => setMode('dark')}>
+            Dark
+          </Button>
+        </Stack>
+        <Typography variant="h6" sx={{ mt: 3 }}>
+          Display
         </Typography>
         <RadioGroup
           sx={{ mt: 2 }}

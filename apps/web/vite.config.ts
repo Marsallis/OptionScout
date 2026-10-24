@@ -15,6 +15,8 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 5173,
+    // Opt-in only. The API still refuses non-loopback changes. Default dev hosts stay strict.
+    allowedHosts: process.env.OPTIONSCOUT_DEV_HOSTS === 'any' ? true : ['127.0.0.1', 'localhost'],
     proxy: {
       '/api': 'http://127.0.0.1:3180',
     },

@@ -8,6 +8,8 @@ import { SuccessToast } from '../brand/SuccessToast';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -58,9 +60,27 @@ export function StrategyBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on auth only
   }, [session?.authenticated]);
 
-  if (status === 'loading') return <Typography sx={{ mt: 4 }}>Loading strategies.</Typography>;
+  if (status === 'loading') {
+    return (
+      <Stack role="status" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+        <CircularProgress size={28} />
+        <Typography>Loading strategies.</Typography>
+      </Stack>
+    );
+  }
   if (!session?.authenticated) {
-    return <Alert severity="info">Sign in to create and edit strategy profiles.</Alert>;
+    return (
+      <Stack spacing={2} sx={{ maxWidth: 640 }}>
+        <Typography variant="h4" component="h1">
+          My Investing Rules
+        </Typography>
+        <Alert severity="info">Sign in to create and edit strategy profiles.</Alert>
+        <Typography variant="body2" color="text.secondary">
+          Rules live on this computer. Hard rules decide eligibility. Preferences separate a best match from a near match. Nothing here
+          places an order.
+        </Typography>
+      </Stack>
+    );
   }
 
   async function withBusy(action: () => Promise<void>): Promise<void> {
@@ -77,10 +97,16 @@ export function StrategyBuilderPage() {
   }
 
   return (
-    <Stack spacing={2.5} sx={{ py: 2 }}>
-      <Box>
-        <Typography variant="h4">My Investing Rules</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+    <Stack spacing={2.5} sx={{ py: { xs: 0.5, md: 2 } }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}>
+        <Box sx={{ minWidth: 0 }}>
+        <Typography variant="overline" color="primary.main">
+          Strategy rules
+        </Typography>
+        <Typography variant="h4" component="h1">
+          My Investing Rules
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
           Hard rules reject contracts. Preferred targets guide Near Match classification. Exploratory and display filters live
           on the LEAPS Finder and never silently rewrite a saved strategy. Each save creates a new revision so older scans
           and bookmarks keep their historical settings.
@@ -90,13 +116,17 @@ export function StrategyBuilderPage() {
             {draft.referenceNote}
           </Typography>
         ) : null}
-      </Box>
+        </Box>
+        <Chip label={`Revision ${draft.revision}`} variant="outlined" sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }} />
+      </Stack>
 
       <SuccessToast message={notice} />
-      {notice ? <Alert severity="info">{notice}</Alert> : null}
+      {notice ? (
+        <Alert severity={/fail|could not|invalid|unavailable/i.test(notice) ? 'error' : 'info'}>{notice}</Alert>
+      ) : null}
 
-      <Paper sx={{ p: 2.5 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: { md: 'center' } }}>
           <TextField
             select
             label="Strategy"
@@ -183,12 +213,15 @@ export function StrategyBuilderPage() {
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: 2.5 }}>
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Typography variant="overline" color="error.main">
+          Hard rules
+        </Typography>
         <Typography variant="h6">A. Hard requirements</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
           Contracts that miss these rules are Outside Profile (still visible for exploration).
         </Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, '& .MuiFormControl-root': { width: '100%' } }}>
           <TextField
             label={STRATEGY_FIELD_HELP.hard.maxContractCost.label}
             helperText={STRATEGY_FIELD_HELP.hard.maxContractCost.help}
@@ -216,16 +249,21 @@ export function StrategyBuilderPage() {
                 hard: { ...current.hard, minExpirationDays: Number(event.target.value) || current.hard.minExpirationDays },
               }))
             }
+            fullWidth
           />
-        </Stack>
+        </Box>
       </Paper>
 
-      <Paper sx={{ p: 2.5 }}>
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Typography variant="overline" color="warning.main">
+          Preferences
+        </Typography>
         <Typography variant="h6">B. Preferred targets</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Missing a preference alone never hides a contract. Unconfigured liquidity stays Unassessed — not passed.
+          Missing a preference alone never hides a contract. Unconfigured liquidity stays Unassessed — not passed. A miss here is a
+          Near Match when every hard rule passed.
         </Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, '& .MuiFormControl-root': { width: '100%' } }}>
           <TextField
             label={STRATEGY_FIELD_HELP.preferences.idealContractCost.label}
             helperText={STRATEGY_FIELD_HELP.preferences.idealContractCost.help}
@@ -297,8 +335,9 @@ export function StrategyBuilderPage() {
                 },
               }))
             }
+          fullWidth
           />
-        </Stack>
+        </Box>
         <Button
           sx={{ mt: 2 }}
           variant="contained"
