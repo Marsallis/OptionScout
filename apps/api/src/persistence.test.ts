@@ -68,7 +68,7 @@ describe('persistence across restart', () => {
       expect(settings.density).toBe('compact');
       expect(dashboard.summary.openPositions).toBe(4);
       expect(dashboard.demo).toBe(true);
-      expect(migrations.count).toBe(15);
+      expect(migrations.count).toBe(16);
       expect(positions.count).toBe(4);
     } finally {
       await second.close();
@@ -97,7 +97,7 @@ describe('persistence across restart', () => {
     const opened = openDatabase(databasePath);
     try {
       const applied = applyMigrations(opened.sqlite, migrationsDirectory());
-      expect(applied).toEqual(['0015_saved_pmcc_ideas.sql']);
+      expect(applied).toEqual(['0015_saved_pmcc_ideas.sql', '0016_trade_journal.sql']);
       const kept = opened.sqlite.prepare('SELECT id FROM broker_transactions WHERE id = ?').get('tx1') as { id: string };
       expect(kept.id).toBe('tx1');
       expect(opened.sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'saved_pmcc_ideas'`).get()).toBeTruthy();

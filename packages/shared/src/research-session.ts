@@ -31,13 +31,13 @@ export const researchUiPrefsSchema = z
   .object({
     discoverView: z.enum(['gallery', 'list']).optional(),
     discoverGroupMode: z.enum(['all', 'by-company']).optional(),
-    discoverFilters: z.record(z.unknown()).optional(),
+    discoverFilters: z.record(z.string(), z.unknown()).optional(),
     discoverSortValue: z.string().optional(),
     selectedCompareIds: z.array(z.string()).max(4).optional(),
     beginnerMode: z.boolean().optional(),
     finderView: z.enum(['gallery', 'list']).optional(),
     finderSort: z.string().max(64).optional(),
-    finderFilters: z.record(z.unknown()).optional(),
+    finderFilters: z.record(z.string(), z.unknown()).optional(),
     finderPresentation: z.string().max(64).optional(),
   })
   .strict();

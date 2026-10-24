@@ -51,6 +51,26 @@ describe('dashboard rendering', () => {
     expect(screen.queryByText(/live market data/i)).not.toBeInTheDocument();
   });
 
+  it('explains the desk, labels simulated data, and switches color mode', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByTestId('home-intro')).toHaveTextContent('What OptionScout does');
+    expect(screen.getByTestId('advice-note')).toHaveTextContent('Not financial advice.');
+    expect(screen.getByTestId('demo-banner')).toHaveTextContent('DEMO MODE');
+    expect(screen.getByTestId('demo-banner')).toHaveTextContent('Demo mode, simulated data');
+    expect(document.documentElement).toHaveAttribute('data-color-mode', 'dark');
+
+    await user.click(screen.getByRole('button', { name: 'Switch to light theme' }));
+    expect(document.documentElement).toHaveAttribute('data-color-mode', 'light');
+    expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument();
+  });
+
   it('keeps unfinished sections labeled as later work', async () => {
     const user = userEvent.setup();
     render(

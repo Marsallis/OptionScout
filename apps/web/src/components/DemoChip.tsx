@@ -1,19 +1,21 @@
 import Chip from '@mui/material/Chip';
+import { useTheme } from '@mui/material/styles';
 
 export function DemoChip() {
+  const theme = useTheme();
   return (
     <Chip
       label="DEMO"
       size="small"
       variant="outlined"
       sx={{
-        height: 22,
-        fontSize: 10,
+        height: 28,
+        fontSize: '0.75rem',
         fontWeight: 700,
         letterSpacing: '0.08em',
-        color: '#8EE0D6',
-        borderColor: 'rgba(46, 196, 182, 0.55)',
-        backgroundColor: 'rgba(46, 196, 182, 0.08)',
+        color: theme.palette.text.primary,
+        borderColor: 'divider',
+        backgroundColor: 'action.hover',
       }}
     />
   );

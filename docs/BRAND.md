@@ -4,8 +4,9 @@ OptionScout’s mark is a magnifying glass with a rising chart. It means search 
 
 ## Where things live
 
-- `apps/web/src/brand/tokens.ts` — colors, type, radius, motion, shadows
-- `apps/web/src/theme.ts` — MUI theme. New screens should use theme values, not one-off hex colors
+- `apps/web/src/brand/tokens.ts` — light and dark palettes, type, radius, motion, shadows
+- `apps/web/src/theme.ts` — MUI theme factory `createAppTheme`. New screens should use theme values, not one-off hex colors
+- `apps/web/src/brand/ColorMode.tsx` — browser-local light/dark preference (`optionscout.colorMode`)
 - `apps/web/src/brand/AppMark.tsx` — icon, including the researching state
 - `apps/web/src/brand/Wordmark.tsx` — sidebar and mobile lockup
 - `apps/web/public/favicon.svg` — browser icon
@@ -26,6 +27,10 @@ Fonts load from the local app. They are not fetched from a CDN at runtime.
 - Stock rows and result cards use a light background or border change. They do not start a scan.
 - The magnifying-glass scan line runs only while research is actually running, and it stops when reduced motion is requested.
 - Progress percentages come from the server’s evaluation budget. The bar is indeterminate while work is still running.
+
+## Color
+
+The desk ships in dark mode and can switch to light from the sidebar, the mobile toolbar, or Settings. Both modes use the same type, radius, and motion. Primary actions are a solid teal. Money colors still follow the data tone below.
 
 ## Color and money
 

@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import type { Dashboard } from '@optionscout/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -6,15 +7,25 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Collapse from '@mui/material/Collapse';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
+import { useExperienceMode } from '../brand/ExperienceMode';
 import { DemoChip } from '../components/DemoChip';
+import { FirstRunGuide } from '../components/FirstRunGuide';
+import { SetupWizard } from '../components/SetupWizard';
+import { PayoffSketch } from '../components/PayoffSketch';
+import { SectionNotice } from '../components/SectionNotice';
+import { WatchlistCard } from '../components/WatchlistCard';
 import { MetricCard } from '../components/MetricCard';
 import { formatAction, formatDate, formatSignedUsd, formatSnapshot, formatUsd, pnlColor } from '../lib/format';
 import { useAppState } from '../state/AppState';
@@ -23,26 +34,46 @@ import { BrokerageOverview } from './BrokeragePages';
 const SHORT_CALL_ACTIONS = new Set(['sell_to_open', 'buy_to_close', 'sell_to_close', 'expire']);
 
 export function OverviewPage() {
-  const { status, error, dashboard, settings } = useAppState();
+  const { dashboardStatus, dashboardError, dashboard, broker, settings, settingsError, retryDashboard, retrySettings } = useAppState();
+  const { mode: experience } = useExperienceMode();
+  const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down('md'));
+  const [fullBook, setFullBook] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
+  const [positionQuery, setPositionQuery] = useState('');
+  const [positionSort, setPositionSort] = useState<'book' | 'az' | 'za'>('book');
+  const visiblePositions = useMemo(() => {
+    const rows = dashboard?.positions ?? [];
+    const needle = positionQuery.trim().toLowerCase();
+    const filtered = rows.filter((position) => {
+      if (!needle) return true;
+      return `${position.underlying} ${position.structure}`.toLowerCase().includes(needle);
+    });
+    if (positionSort === 'book') return filtered;
+    return [...filtered].sort((left, right) =>
+      positionSort === 'za' ? right.underlying.localeCompare(left.underlying) : left.underlying.localeCompare(right.underlying),
+    );
+  }, [dashboard?.positions, positionQuery, positionSort]);
 
-  if (status === 'loading') {
+  if (dashboardStatus === 'loading') {
     return (
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 4 }}>
-        <CircularProgress size={22} />
+      <Stack role="status" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+        <CircularProgress size={28} />
         <Typography>Loading the demo dashboard.</Typography>
       </Stack>
     );
   }
 
-  if (status === 'error' || !dashboard) {
-    return <Alert severity="error">{error ?? 'The demo dashboard is unavailable.'}</Alert>;
+  if (dashboardStatus === 'error' || !dashboard) {
+    return <SectionNotice title="The demo book did not load." message={dashboardError ?? 'The demo dashboard is unavailable.'} onRetry={retryDashboard} />;
   }
 
   if (settings?.portfolioView === 'brokerage') {
     return <BrokerageOverview />;
   }
 
+  const connected = broker?.connection.state === 'connected' && broker.authenticated;
+  const sessionUpdated = broker?.connection.lastSuccessAt ?? broker?.quotes.fetchedAt ?? broker?.quotes.asOf ?? null;
   const showGreeks = settings?.showGreeks ?? true;
   const dense = settings?.density === 'compact';
   const shortCalls = dashboard.transactions.filter((transaction) => SHORT_CALL_ACTIONS.has(transaction.action));
@@ -57,11 +88,87 @@ export function OverviewPage() {
             Overview
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Demo investing snapshot {formatSnapshot(dashboard.asOf)}
+            Last updated {formatSnapshot(dashboard.asOf)}
           </Typography>
         </Box>
         <DemoChip />
       </Stack>
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }} component="section" aria-label="Connection status">
+        <Typography variant="overline" color="text.secondary">
+          Connection
+        </Typography>
+        <Typography variant="body1" sx={{ mt: 0.5 }}>
+          {connected ? 'Connected. Read-only.' : 'Simulated. Not connected.'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Orders are off. Last updated {formatSnapshot(connected && sessionUpdated ? sessionUpdated : dashboard.asOf)}.
+          {connected ? ' This time is from the read-only brokerage session.' : ' This time is the simulated book.'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          {dashboard.brokerage.label}
+        </Typography>
+      </Paper>
+
+      <SetupWizard />
+      {experience === 'beginner' ? <FirstRunGuide /> : null}
+      {experience === 'beginner' ? <PayoffSketch /> : null}
+      <WatchlistCard />
+      {phone ? (
+        <Button aria-expanded={fullBook} onClick={() => setFullBook((open) => !open)} sx={{ alignSelf: 'flex-start' }}>
+          {fullBook ? 'Hide the full book' : 'Show the full book'}
+        </Button>
+      ) : null}
+      {!phone || fullBook ? (
+      <>
+      {settingsError ? <SectionNotice title="Settings did not load." message={settingsError} onRetry={retrySettings} /> : null}
+      <Paper data-testid="home-intro" sx={{ p: { xs: 2, md: 3 }, backgroundImage: 'none' }}>
+        <Typography variant="overline" color="primary.main">
+          What OptionScout does
+        </Typography>
+        <Typography variant="h5" component="h2" sx={{ mt: 0.75, maxWidth: 720 }}>
+          Compare long-dated calls with rules you saved.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 760 }}>
+          This home view is the simulated book: fictional positions, prices, and alerts so you can learn the desk before connecting a
+          brokerage. Searches stay on your computer. Matching a rule is never a claim that a trade is profitable.
+        </Typography>
+        <Box
+          sx={{
+            mt: 2,
+            display: 'grid',
+            gap: 1.5,
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+          }}
+        >
+          <IntroStep
+            step="1"
+            title="Read the book"
+            body="Overview shows capital, unrealized marks, and upcoming expirations from the demo fixtures."
+          />
+          <IntroStep
+            step="2"
+            title="Check one chain"
+            body="Find One Stock evaluates the fictional DEMO ticker against your saved hard rules and preferences."
+          />
+          <IntroStep
+            step="3"
+            title="Compare a list"
+            body="Explore Stocks groups best and near matches. Best means every assessed rule passed."
+          />
+        </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
+          <Button variant="contained" component={RouterLink} to="/leaps">
+            Start with one ticker
+          </Button>
+          <Button variant="outlined" component={RouterLink} to="/discover">
+            Compare several companies
+          </Button>
+          <Button variant="outlined" component={RouterLink} to="/strategies">
+            Edit investing rules
+          </Button>
+        </Stack>
+      </Paper>
 
       <Alert severity="info" icon={false}>
         Positions currently held, capital at work, and risk-review alerts. Matching a strategy or filter is never a claim that a trade is
@@ -161,7 +268,13 @@ export function OverviewPage() {
           <Paper sx={{ overflow: 'auto' }}>
             <Stack direction="row" sx={{ px: 2, py: 1.5, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="h6">Active positions</Typography>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField size="small" label="Filter positions" value={positionQuery} onChange={(event) => setPositionQuery(event.target.value)} />
+                <TextField select size="small" label="Sort positions" value={positionSort} onChange={(event) => setPositionSort(event.target.value as typeof positionSort)} sx={{ minWidth: 140 }}>
+                  <MenuItem value="book">As saved</MenuItem>
+                  <MenuItem value="az">A to Z</MenuItem>
+                  <MenuItem value="za">Z to A</MenuItem>
+                </TextField>
                 <Button size="small" onClick={() => setShowLedger((value) => !value)}>
                   {showLedger ? 'Hide how this was calculated' : 'How this was calculated'}
                 </Button>
@@ -181,7 +294,7 @@ export function OverviewPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dashboard.positions.map((position) => (
+                {visiblePositions.map((position) => (
                   <TableRow key={position.id} hover>
                     <TableCell sx={{ fontWeight: 700 }}>{position.underlying}</TableCell>
                     <TableCell>
@@ -311,7 +424,7 @@ export function OverviewPage() {
                     {item.underlying}
                   </Typography>
                   <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatUsd(item.demoLast)}
+                    {formatUsd(item.demoLast)} simulated
                   </Typography>
                 </Stack>
                 <Typography variant="caption" color="text.secondary">
@@ -350,7 +463,25 @@ export function OverviewPage() {
           </Stack>
         </Panel>
       </Box>
+      </>
+      ) : null}
     </Stack>
+  );
+}
+
+function IntroStep({ step, title, body }: { step: string; title: string; body: string }) {
+  return (
+    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', minWidth: 0 }}>
+      <Typography variant="caption" color="primary.main" sx={{ fontWeight: 800 }}>
+        {step}
+      </Typography>
+      <Typography variant="subtitle2" sx={{ mt: 0.25 }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {body}
+      </Typography>
+    </Box>
   );
 }
 
@@ -362,7 +493,7 @@ function BrokerCard({ dashboard }: { dashboard: Dashboard }) {
         <DemoChip />
       </Stack>
       <Typography variant="body2" sx={{ fontWeight: 650 }}>
-        {dashboard.brokerage.connectionStatus === 'demo-only' ? 'Demo only' : dashboard.brokerage.connectionStatus}
+        {dashboard.brokerage.connectionStatus === 'demo-only' ? 'Simulated. Not connected.' : dashboard.brokerage.connectionStatus}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
         {dashboard.brokerage.label}

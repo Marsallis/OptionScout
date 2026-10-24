@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Paper from '@mui/material/Paper';
@@ -8,17 +9,23 @@ import RadioGroup from '@mui/material/RadioGroup';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
+import { useColorMode } from '../brand/ColorMode';
+import { useExperienceMode } from '../brand/ExperienceMode';
+import { ThemePicker } from '../components/ThemePicker';
 import { DemoChip } from '../components/DemoChip';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 
 export function SettingsPage() {
-  const { status, error, settings, session, savePreferences } = useAppState();
+  const { settingsStatus, settingsError, settings, session, savePreferences, retrySettings } = useAppState();
+  const { mode, setMode } = useColorMode();
+  const experience = useExperienceMode();
   const [message, setMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated);
 
-  if (status === 'loading' || !settings) {
-    if (status === 'error') {
-      return <Alert severity="error">{error ?? 'Settings are unavailable.'}</Alert>;
+  if (settingsStatus === 'loading' || !settings) {
+    if (settingsStatus === 'error') {
+      return <SectionNotice title="Settings are unavailable." message={settingsError ?? 'The settings request failed.'} onRetry={retrySettings} />;
     }
     return (
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 4 }}>
@@ -37,9 +44,35 @@ export function SettingsPage() {
         <DemoChip />
       </Stack>
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
-        <Typography variant="h6">Display</Typography>
+        <Typography variant="h6">Appearance</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          These preferences are stored in the local SQLite database.
+          Light and dark stay in this browser. Density and Greeks are stored in the local SQLite database.
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
+          <Button variant={mode === 'light' ? 'contained' : 'outlined'} onClick={() => setMode('light')}>
+            Light
+          </Button>
+          <Button variant={mode === 'dark' ? 'contained' : 'outlined'} onClick={() => setMode('dark')}>
+            Dark
+          </Button>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Colorways sit on top of light and dark. The choice stays in this browser.
+        </Typography>
+        <ThemePicker compact />
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Beginner adds a welcome guide and a plain-language payoff picture. Pro keeps the same pages with less teaching text.
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+          <Button variant={experience.mode === 'beginner' ? 'contained' : 'outlined'} onClick={() => experience.setMode('beginner')} aria-pressed={experience.mode === 'beginner'}>
+            Beginner view
+          </Button>
+          <Button variant={experience.mode === 'pro' ? 'contained' : 'outlined'} onClick={() => experience.setMode('pro')} aria-pressed={experience.mode === 'pro'}>
+            Pro view
+          </Button>
+        </Stack>
+        <Typography variant="h6" sx={{ mt: 3 }}>
+          Display
         </Typography>
         <RadioGroup
           sx={{ mt: 2 }}

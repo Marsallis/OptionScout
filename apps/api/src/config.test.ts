@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -37,6 +38,8 @@ describe('application configuration', () => {
       ordersEnabled: false,
       telemetryEnabled: false,
       staticDir: null,
+      publicSimulatedDemo: false,
+      tastytrade: null,
     });
   });
 
@@ -78,5 +81,33 @@ describe('application configuration', () => {
       expect((error as Error).message).toContain('TASTYTRADE_REFRESH_TOKEN');
       expect((error as Error).message).not.toContain(secret);
     }
+  });
+
+  it('keeps a public simulated demo on the simulated book and ignores the secret file', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'optionscout-public-demo-'));
+    const secretFilePath = path.join(directory, 'tastytrade.env');
+    fs.writeFileSync(
+      secretFilePath,
+      'TASTYTRADE_CLIENT_ID=id\nTASTYTRADE_CLIENT_SECRET=secret\nTASTYTRADE_REFRESH_TOKEN=token\nTASTYTRADE_ENVIRONMENT=sandbox\n',
+    );
+    const config = parseConfig(
+      baseEnv({
+        PUBLIC_SIMULATED_DEMO: 'true',
+        TASTYTRADE_ENABLE_LIVE: 'true',
+        FINDER_LIVE_SCAN: 'true',
+        SMART_SCAN_LIVE: 'true',
+        DXLINK_LIVE_DIAGNOSTIC: 'true',
+      }),
+      { secretFilePath },
+    );
+    expect(config.publicSimulatedDemo).toBe(true);
+    expect(config.liveEnabled).toBe(false);
+    expect(config.finderLiveScan).toBe(false);
+    expect(config.smartScanLive).toBe(false);
+    expect(config.dxlinkLiveDiagnostic).toBe(false);
+    expect(config.tastytrade).toBeNull();
+    expect(config.secretFileComplete).toBe(false);
+    expect(config.ordersEnabled).toBe(false);
+    fs.rmSync(directory, { recursive: true, force: true });
   });
 });

@@ -152,6 +152,7 @@ function candidateFixture(overrides: Partial<FinderCandidate> = {}): FinderCandi
       dte: 463,
       theta: -0.02,
       downsideMoneyness: 18,
+      pmccCompatibility: null,
     },
     pmccReason: null,
     meetsConfiguredNumericRequirements: true,
@@ -326,6 +327,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: null,
       csrfToken: null,
+      publicSimulatedDemo: false,
     };
     expect(() =>
       rerender(
@@ -360,6 +362,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     mocks.appState.settings = { ...settingsFixture, portfolioView: 'demo' };
     renderFinder();
@@ -403,6 +406,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     mocks.appState.settings = {
       ...settingsFixture,
@@ -464,6 +468,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     mocks.createFinderScan.mockResolvedValue(
       scanFixture({
@@ -505,6 +510,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     const first = candidateFixture({ id: 'a', label: 'Near Match', outcome: 'near', metrics: { ...candidateFixture().metrics, purchaseCost: 5500, delta: 0.82 } });
     const second = candidateFixture({
@@ -587,6 +593,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     const server = new Map<string, ResearchUiPrefs>([
       [
@@ -687,6 +694,7 @@ describe('LEAPS Finder page', () => {
       ownerConfigured: true,
       expiresAt: '2026-10-15T20:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     const profiles = (await mocks.fetchStrategyProfiles()) as { profiles: Array<FinderResearchRestore['strategySnapshot']> };
     const partialCandidate = candidateFixture({ id: 'partial', label: 'Near Match', outcome: 'near' });

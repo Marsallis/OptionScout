@@ -653,7 +653,7 @@ function rowToFinderSummary(row: Record<string, unknown>): ResearchSessionSummar
     String(row.meta_json),
     {},
   );
-  const progress = parseJson<{ contractsFullyEvaluated?: number; canScanMore?: boolean }>(
+  const progress = parseJson<{ contractsFullyEvaluated?: number; fullyEvaluated?: number; canScanMore?: boolean }>(
     String(row.progress_json),
     {},
   );
@@ -674,7 +674,7 @@ function rowToFinderSummary(row: Record<string, unknown>): ResearchSessionSummar
     companiesRemaining: 0,
     companiesInUniverse: 1,
     activeBatchId: row.active_batch_id != null ? String(row.active_batch_id) : null,
-    contractsEvaluated: progress.contractsFullyEvaluated ?? 0,
+    contractsEvaluated: progress.fullyEvaluated ?? progress.contractsFullyEvaluated ?? 0,
     canScanNextCompanies: false,
     canScanMoreContracts: canMore,
     persistence: 'sqlite' as const,

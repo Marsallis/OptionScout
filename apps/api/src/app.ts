@@ -55,6 +55,7 @@ export function createApp(context: AppContext): Express {
       liveEnabled: context.config.liveEnabled,
       scheduledSyncEnabled: false as const,
       ownerConfigured: ownerConfiguredForHealth(context),
+      publicSimulatedDemo: context.config.publicSimulatedDemo,
     };
     res.json(healthSchema.parse(body));
   });

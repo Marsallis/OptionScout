@@ -166,6 +166,11 @@ export function BeginnerStockForm({
         ))}
       </Stack>
 
+      {directory?.note ? (
+        <Typography variant="caption" color="text.secondary">
+          {directory.note}
+        </Typography>
+      ) : null}
       {universe && universe.tickers.length > 0 ? (
         <>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -255,9 +260,7 @@ export function BeginnerStockForm({
           </Stack>
         </>
       ) : (
-        <Typography variant="body2">
-          {directory?.note ?? 'This category has no company list on this computer yet.'}
-        </Typography>
+        <Typography variant="body2">This category has no company list on this computer yet.</Typography>
       )}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>

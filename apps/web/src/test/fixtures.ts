@@ -203,4 +203,5 @@ export const sessionFixture = {
   ownerConfigured: false,
   expiresAt: null,
   csrfToken: null,
+  publicSimulatedDemo: false,
 };

@@ -148,6 +148,7 @@ describe('Acceptance 12 — Discover preferences survive navigation and refresh'
       ownerConfigured: true,
       expiresAt: '2026-10-17T23:00:00.000Z',
       csrfToken: 'csrf-test',
+      publicSimulatedDemo: false,
     };
     mocks.appState.settings = { ...settingsFixture, portfolioView: 'brokerage' };
     mocks.appState.broker = brokerFixture;

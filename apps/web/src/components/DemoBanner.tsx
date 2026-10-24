@@ -4,6 +4,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import { useAppState } from '../state/AppState';
 
 function quoteLabel(state: string | undefined): string {
@@ -33,6 +34,7 @@ function brokeragePrimaryLabel(input: {
 }
 
 export function DemoBanner() {
+  const theme = useTheme();
   const { dashboard, settings, broker } = useAppState();
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const brokerageView = settings?.portfolioView === 'brokerage';
@@ -52,6 +54,7 @@ export function DemoBanner() {
         ? 'Cached research data available. Provider session is not active right now.'
         : 'No active provider session. Sign in on Broker & Data when you need a live connection.'
     : (dashboard?.disclaimer ?? DEMO_DISCLAIMER);
+  const dark = theme.palette.mode === 'dark';
 
   return (
     <Box
@@ -63,16 +66,25 @@ export function DemoBanner() {
         display: 'flex',
         flexDirection: 'column',
         gap: 0.75,
-        borderBottom: '1px solid rgba(46, 196, 182, 0.35)',
-        backgroundColor: 'rgba(46, 196, 182, 0.1)',
+        borderBottom: '1px solid',
+        borderColor: dark ? 'rgba(45, 212, 191, 0.35)' : 'rgba(15, 118, 110, 0.28)',
+        backgroundColor: dark ? 'rgba(45, 212, 191, 0.10)' : 'rgba(15, 118, 110, 0.08)',
       }}
     >
       <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <Typography component="strong" sx={{ color: '#8EE0D6', letterSpacing: '0.08em', fontSize: 12 }}>
+        <Typography
+          component="strong"
+          sx={{ color: dark ? '#8EE0D6' : 'primary.dark', letterSpacing: '0.08em', fontSize: 12, fontWeight: 800 }}
+        >
           {label}
         </Typography>
+        {brokerageView ? null : (
+          <Typography component="span" variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+            Demo mode, simulated data
+          </Typography>
+        )}
         {brokerageView ? (
-          <Typography component="strong" sx={{ color: '#D7E2EA', letterSpacing: '0.08em', fontSize: 12 }}>
+          <Typography component="strong" sx={{ color: 'text.primary', letterSpacing: '0.08em', fontSize: 12 }}>
             {quoteLabel(broker?.quotes.state)}
           </Typography>
         ) : null}

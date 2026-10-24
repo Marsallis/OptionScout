@@ -29,6 +29,8 @@ export interface FinderSearchInputs {
   brokerageLiveConfigured: boolean;
   /** Optional: connection already succeeded this process */
   brokerageConnectedThisProcess?: boolean;
+  /** Opt-in public demo. Simulated DEMO searches do not need an owner session. */
+  publicSimulatedDemo?: boolean;
 }
 
 export interface FinderSearchState {
@@ -73,7 +75,7 @@ export function resolveFinderSearchState(input: FinderSearchInputs): FinderSearc
     };
   }
 
-  if (!input.authenticated) {
+  if (!input.authenticated && !input.publicSimulatedDemo) {
     return {
       blocker: 'signed-out',
       canSearch: false,
@@ -112,7 +114,8 @@ export function resolveFinderSearchState(input: FinderSearchInputs): FinderSearc
     };
   }
 
-  if (input.portfolioView === 'demo') {
+  const portfolioView = input.publicSimulatedDemo ? 'demo' : input.portfolioView;
+  if (portfolioView === 'demo') {
     if (!isDemoOnlyTicker(ticker)) {
       return {
         blocker: 'demo-mode-real-ticker',

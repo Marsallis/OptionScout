@@ -23,6 +23,9 @@ export {
   importedTransactionSchema,
   journalEntrySchema,
   loginRequestSchema,
+  ownerSetupRequestSchema,
+  watchlistQuoteSchema,
+  watchlistQuotesResponseSchema,
   quoteSnapshotSchema,
   sessionViewSchema,
   settingsSchema,
@@ -302,6 +305,7 @@ export {
   smartScanRetryCompaniesRequestSchema,
   validateTickerSymbol,
 } from './smart-scan.js';
+export { INDEX_DIRECTORY_LIST, INDEX_DIRECTORY_UNIVERSES } from './index-directories.js';
 export {
   STOCK_COLLECTION_CATALOG,
   collectionDisplayName,
@@ -406,6 +410,22 @@ export {
   selectEquitySpotPrice,
   strikeDistance,
 } from './finder-math.js';
+export { analyzePmcc, evaluatePmccRules } from './pmcc-math.js';
+export type { PmccAnalysis, PmccLegInput, PmccRuleCheck } from './pmcc-math.js';
+export { callMark, legMark, netEntryDebit, netGreeks, pnlSeries, scenarioPnl, spotGrid } from './risk-lab.js';
+export type { RiskGreeks, RiskLeg } from './risk-lab.js';
+export {
+  estimatedJournalPnl,
+  summarizeJournal,
+  tradeJournalEntrySchema,
+  tradeJournalListSchema,
+  tradeJournalOutcomeSchema,
+  tradeJournalSummarySchema,
+  tradeJournalWriteSchema,
+} from './trade-journal.js';
+export type { TradeJournalEntry, TradeJournalSummary, TradeJournalWrite } from './trade-journal.js';
+export { demoChainContractSchema, demoChainSchema } from './demo-chain.js';
+export type { DemoChain, DemoChainContract } from './demo-chain.js';
 export type {
   AlertView,
   BrokerOverview,
@@ -419,6 +439,8 @@ export type {
   QuoteSnapshotView,
   ResearchCandidateView,
   SessionView,
+  WatchlistQuote,
+  WatchlistQuotesResponse,
   SettingsUpdate,
   SettingsView,
   SyncRequest,

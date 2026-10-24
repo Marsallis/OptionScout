@@ -8,6 +8,8 @@ import {
   SMART_SCAN_LIVE_DIAGNOSTIC_ALLOWLIST,
   BEGINNER_SELECTION_LIMIT,
   SMART_SCAN_MAX_TICKERS,
+  INDEX_DIRECTORY_LIST,
+  INDEX_DIRECTORY_UNIVERSES,
   collectionDisplayName,
   installedHoldingsForFund,
   isUnverifiedOrIncompleteCandidate,
@@ -57,6 +59,7 @@ import { DiscoverResultsSection } from '../components/DiscoverResultsSection';
 import { SuccessToast } from '../brand/SuccessToast';
 import { SmartScanProgressPanel } from '../components/SmartScanProgressPanel';
 import { RecentSearchesPanel } from '../components/RecentSearchesPanel';
+import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
 import { useResearchWorkspace } from '../state/ResearchWorkspace';
 
@@ -140,7 +143,7 @@ function diagnosticBlockedTickers(tickers: string[], policy: SmartScanPolicy | n
 }
 
 export function DiscoverOpportunitiesPage() {
-  const { status, session, error, settings, broker } = useAppState();
+  const { status, session, error, settings, broker, retrySession } = useAppState();
   const research = useResearchWorkspace();
   const [profiles, setProfiles] = useState<StrategyProfile[]>([SAL_PMCC_DEEP_ITM]);
   const [profilesFromServer, setProfilesFromServer] = useState(false);
@@ -192,6 +195,7 @@ export function DiscoverOpportunitiesPage() {
     research.discover.strategySnapshot ??
     (scan != null ? (profiles.find((row) => row.id === scan.profileId) ?? activeProfile) : activeProfile);
   const authenticated = Boolean(session?.authenticated);
+  const researchOpen = authenticated || Boolean(session?.publicSimulatedDemo);
   const diagnosticMode = Boolean(policy?.enabled && policy.mode === 'diagnostic');
   const normalLiveReady = Boolean(policy?.enabled && policy.mode === 'normal');
   const operationCap = policy?.maxTickers ?? SMART_SCAN_MAX_TICKERS;
@@ -223,12 +227,18 @@ export function DiscoverOpportunitiesPage() {
   );
 
   const selectedUniverse = useMemo(() => {
-    const all = [...universes.curated, ...universes.saved, ...(universes.bookmarkDerived ? [universes.bookmarkDerived] : [])];
+    const all = [
+      ...INDEX_DIRECTORY_LIST,
+      ...universes.curated,
+      ...universes.saved,
+      ...(universes.bookmarkDerived ? [universes.bookmarkDerived] : []),
+    ];
     return all.find((row) => row.id === selectedUniverseId) ?? null;
   }, [universes, selectedUniverseId]);
 
   const researchStatusLabel = useMemo(() => {
-    if (!authenticated) return 'Sign in required for scans';
+    if (!researchOpen) return 'Sign in required for scans';
+    if (session?.publicSimulatedDemo && !authenticated) return 'Public simulated demo';
     if (broker?.connection.state === 'connected') return 'Active provider session';
     const quoteState = broker?.quotes.state;
     if (quoteState === 'fresh' || quoteState === 'closed_session' || quoteState === 'stale' || broker?.quotes.asOf) {
@@ -236,7 +246,7 @@ export function DiscoverOpportunitiesPage() {
     }
     if (broker?.connection.lastSuccessAt) return 'Cached research data available';
     return 'Provider session inactive';
-  }, [authenticated, broker]);
+  }, [authenticated, broker, researchOpen, session?.publicSimulatedDemo]);
 
   const restoreDiscoverById = research.restoreDiscoverById;
   useEffect(() => {
@@ -263,7 +273,7 @@ export function DiscoverOpportunitiesPage() {
   }, [status]);
 
   useEffect(() => {
-    if (status !== 'ready' || !authenticated) return;
+    if (status !== 'ready' || !researchOpen) return;
     void Promise.all([fetchStrategyProfiles(), fetchDiscoveryUniverses()])
       .then(([profileBody, universeBody]) => {
         setProfiles(profileBody.profiles.length > 0 ? profileBody.profiles : [SAL_PMCC_DEEP_ITM]);
@@ -273,6 +283,7 @@ export function DiscoverOpportunitiesPage() {
         }
         setUniverses(universeBody);
         const known = [
+          ...INDEX_DIRECTORY_LIST,
           ...universeBody.curated,
           ...universeBody.saved,
           ...(universeBody.bookmarkDerived ? [universeBody.bookmarkDerived] : []),
@@ -296,7 +307,7 @@ export function DiscoverOpportunitiesPage() {
         }
       })
       .catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not load discovery data.'));
-  }, [status, authenticated, policy]);
+  }, [status, researchOpen, policy]);
 
   useEffect(() => {
     if (!selectedUniverse) return;
@@ -379,7 +390,7 @@ export function DiscoverOpportunitiesPage() {
   }, []);
 
   async function runFind(tickersOverride?: string[]): Promise<void> {
-    if (!authenticated) {
+    if (!researchOpen) {
       setNotice('Sign in on Broker & Data before starting Explore Stocks.');
       return;
     }
@@ -435,8 +446,12 @@ export function DiscoverOpportunitiesPage() {
       return stillThisSearch() ? current : null;
     };
     try {
+      const directoryUniverse = directories.find((row) => row.id === activeDirectoryId)?.universe ?? null;
       const names = Object.fromEntries(
-        chosen.map((ticker) => [ticker, selectedUniverse?.companyNames[ticker] ?? ticker]),
+        chosen.map((ticker) => [
+          ticker,
+          selectedUniverse?.companyNames[ticker] ?? directoryUniverse?.companyNames[ticker] ?? ticker,
+        ]),
       );
       const searchName = chosen.length <= 6 ? chosen.join(', ') : `${chosen.slice(0, 5).join(', ')} +${chosen.length - 5}`;
       const saved = await createDiscoveryUniverse({
@@ -603,20 +618,26 @@ export function DiscoverOpportunitiesPage() {
       {
         id: 'sp500',
         label: 'S&P 500',
-        universe: fund('IVV') ?? fund('VOO') ?? fund('SPY'),
-        note: 'Not installed. On the iShares IVV page, open Holdings and download the CSV once, then import it under Advanced Research. That file is the fund’s holdings, not an S&P membership feed.',
+        universe: fund('IVV') ?? fund('VOO') ?? fund('SPY') ?? INDEX_DIRECTORY_UNIVERSES.sp500,
+        note: fund('IVV') || fund('VOO') || fund('SPY')
+          ? 'Using your imported holdings file.'
+          : 'Included list of S&P 500 companies. Import a holdings file under Advanced Research only if you want to replace it.',
       },
       {
         id: 'vti',
         label: 'VTI',
-        universe: fund('VTI'),
-        note: 'Not installed. On the Vanguard VTI page, open Portfolio composition and download the full holdings file once, then import it under Advanced Research.',
+        universe: fund('VTI') ?? INDEX_DIRECTORY_UNIVERSES.vti,
+        note: fund('VTI')
+          ? 'Using your imported holdings file.'
+          : 'Included list of VTI companies. Import a holdings file under Advanced Research only if you want to replace it.',
       },
       {
         id: 'qqq',
         label: 'Nasdaq-100',
-        universe: fund('QQQ'),
-        note: 'Not installed. On the Invesco QQQ page, export the holdings once, then import that file under Advanced Research. It is the fund file, not a Nasdaq membership feed.',
+        universe: fund('QQQ') ?? INDEX_DIRECTORY_UNIVERSES.nasdaq100,
+        note: fund('QQQ')
+          ? 'Using your imported holdings file.'
+          : 'Included list of Nasdaq-100 companies. Import a holdings file under Advanced Research only if you want to replace it.',
       },
     ];
     for (const row of saved) {
@@ -665,10 +686,11 @@ export function DiscoverOpportunitiesPage() {
     profileId,
   ]);
   useEffect(() => {
+    // The beginner list renders from the directory itself. Selecting that universe
+    // also mounts the advanced picker, so wait until the owner chooses a category.
+    if (!directoryChosen || selectedUniverseId) return;
     const active = directories.find((row) => row.id === activeDirectoryId);
     if (!active?.universe || selectedUniverseId === active.universe.id) return;
-    // A restored draft already names its category. Do not replace that selection on remount.
-    if (directoryChosen && selectedUniverseId) return;
     setSelectedUniverseId(active.universe.id);
   }, [activeDirectoryId, directories, selectedUniverseId, directoryChosen]);
 
@@ -676,7 +698,7 @@ export function DiscoverOpportunitiesPage() {
     return <Typography>Loading Explore Stocks.</Typography>;
   }
   if (status === 'error') {
-    return <Alert severity="error">{error ?? 'API unavailable.'}</Alert>;
+    return <SectionNotice title="Explore Stocks is unavailable." message={error ?? 'The session check failed.'} onRetry={retrySession} />;
   }
 
   return (
@@ -714,7 +736,7 @@ export function DiscoverOpportunitiesPage() {
         </Alert>
       ) : null}
 
-      {!authenticated ? (
+      {!researchOpen ? (
         <Alert severity="warning">
           Sign in required.{' '}
           <Link component={RouterLink} to="/broker">
@@ -847,7 +869,7 @@ export function DiscoverOpportunitiesPage() {
                 await reloadUniverses();
                 setDirectoryId(saved.id);
                 setSelectedUniverseId(saved.id);
-                setSelectedTickers([]);
+                setSelectedTickers(saved.tickers.slice(0, maxSelectable));
                 setNotice(`${saved.tickers.length} companies are in the picker. Check up to ${maxSelectable}.`);
               }).catch((reason: unknown) => setNotice(reason instanceof Error ? reason.message : 'Could not save those symbols.'));
             }}
@@ -916,10 +938,10 @@ export function DiscoverOpportunitiesPage() {
         }}
         onFindLeaps={() => void runFind()}
         onExploreEntireList={() => void runFind()}
-        entireListDisabled={busy || !authenticated || scanBlocked || !selectedUniverse || selectedUniverse.tickers.length === 0}
-        findDisabled={busy || !authenticated || scanBlocked || pendingTickers.length === 0}
+        entireListDisabled={busy || !researchOpen || scanBlocked || !selectedUniverse || selectedUniverse.tickers.length === 0}
+        findDisabled={busy || !researchOpen || scanBlocked || pendingTickers.length === 0}
         findDisabledReason={
-          !authenticated
+          !researchOpen
             ? 'Scan Selected Stocks is unavailable until you sign in.'
             : pendingTickers.length === 0
               ? 'Scan Selected Stocks is unavailable until at least one company is selected.'

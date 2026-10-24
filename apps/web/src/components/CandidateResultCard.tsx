@@ -93,6 +93,16 @@ export function CandidateResultCard({
         ? formatUsd(candidate.calculations.bidAskSpreadDollars)
         : '—';
   const drawback = fit ? biggestFactualDrawback(fit) : null;
+  const groupTone =
+    fit?.invalidMarketData || fit?.eligibility === 'not-eligible'
+      ? 'error.main'
+      : fit?.eligibility === 'cannot-verify'
+        ? 'warning.main'
+        : fit && drawback
+          ? 'warning.main'
+          : fit
+            ? 'success.main'
+            : 'divider';
   const spreadWarning = bidAskSpreadWarning({
     bidAskSpreadPercent: candidate.calculations.bidAskSpreadPercent,
     crossedMarket: candidate.flags.crossedMarket,
@@ -120,6 +130,9 @@ export function CandidateResultCard({
         height: '100%',
         opacity: hiddenByFilter ? 0.72 : 1,
         borderStyle: hiddenByFilter ? 'dashed' : 'solid',
+        borderLeftWidth: 4,
+        borderLeftColor: groupTone,
+        borderLeftStyle: 'solid',
       }}
     >
       <Stack spacing={1.25} sx={{ height: '100%' }}>
@@ -160,9 +173,14 @@ export function CandidateResultCard({
           ) : null}
         </Box>
 
-        <Typography variant="h6" sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums', my: 0.25 }}>
-          {formatUsd(candidate.calculations.estimatedPurchaseCost)}
-        </Typography>
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            Estimated cost
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+            {formatUsd(candidate.calculations.estimatedPurchaseCost)}
+          </Typography>
+        </Box>
 
         {fit ? (
           <PlanFitScoreBadge fit={fit} size={beginnerMode ? 'gallery' : 'compact'} showEligibility={false} />
@@ -172,8 +190,7 @@ export function CandidateResultCard({
           sx={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            columnGap: 1.5,
-            rowGap: 0.65,
+            gap: 1,
           }}
         >
           <Metric label="Delta" value={deltaLabel} />
@@ -260,11 +277,11 @@ export function CandidateResultCard({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <Stack spacing={0.1}>
+    <Stack spacing={0.15} sx={{ px: 1, py: 0.75, borderRadius: 1.5, bgcolor: 'action.hover', minWidth: 0 }}>
       <Typography variant="caption" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 650 }}>
+      <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, overflowWrap: 'anywhere' }}>
         {value}
       </Typography>
     </Stack>

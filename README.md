@@ -8,6 +8,13 @@ OptionScout is educational research software. It is not a brokerage, a trading b
 
 You can learn the workflow with a built-in simulated book. Connecting a brokerage account is optional, and that connection is read-only.
 
+## Try it on one screen
+
+1. From the project directory, run `sh scripts/setup.sh --start` (or `.\scripts\setup.ps1` and `docker compose up -d --build` on Windows).
+2. Open [http://127.0.0.1:3180](http://127.0.0.1:3180). Overview is the simulated book. It does not need a passphrase.
+3. On Find One Stock, search `DEMO`. A local install asks you to create a passphrase first. Set `PUBLIC_SIMULATED_DEMO=true` only when you want that simulated `DEMO` search, and the four research pages, to work without sign-in. Orders and broker changes stay refused.
+4. Open PMCC Builder, Risk Lab, Research Feed, and Trade Journal. They use the simulated book. They do not place orders. Faircloth OS stays off.
+
 ## What you can do today
 
 **Find One Stock.** Look at long-dated calls on one company, including a fund ticker such as a single ETF. In the simulated portfolio view, the practice chain is the fictional ticker `DEMO`.
@@ -16,7 +23,7 @@ You can learn the workflow with a built-in simulated book. Connecting a brokerag
 
 **Bring your own ticker list.** Import a CSV of symbols, add a ticker by hand, or start from a small curated example list. Those example lists are application samples. They are not official index membership files.
 
-**Use a large directory when you have the file.** S&P 500, total-market, and Nasdaq-100 collections explain where to download a fund's own holdings file. OptionScout does not download or redistribute those files. An empty category stays empty until you import one.
+**Open a large directory.** Explore Stocks includes research snapshots of the S&P 500, Nasdaq-100, and VTI company lists. Pick one and the companies are already there. Importing a fund holdings file is optional and replaces that snapshot for the matching fund.
 
 **Save an investing strategy.** The built-in example is Sal PMCC — Deep ITM, revision 1. It shows how rules are stored. It is not a recommended investment strategy, and it is not a later private revision of a personal profile. You can copy it and change the numbers. Revisions you save stay in your local database.
 
@@ -30,16 +37,16 @@ You can learn the workflow with a built-in simulated book. Connecting a brokerag
 
 **Review a portfolio.** The simulated Overview is a fictional book of long calls and poor man's covered calls. After you sign in and choose the brokerage portfolio, Overview and My Positions use your imported records instead. A confirmed PMCC shows the long call and the short call separately. Missing, stale, or incomplete figures stay labeled that way. Realized profit is not shown as verified when the accounting is incomplete.
 
-## What is not built yet
+## Research desk
 
-These navigation items are placeholders. They do not calculate or submit anything:
+These screens work on the simulated book. They do not submit orders.
 
-- PMCC Builder
-- Risk Lab
-- Research Feed
-- Trade Journal
+- **PMCC Builder** pairs a long DEMO call with a shorter call and shows debit, profit, loss, breakeven, intrinsic and extrinsic value, and whether the pair passes your saved rules.
+- **Risk Lab** charts modeled P/L at expiration and at a chosen date, with sliders for price, IV, and days passed.
+- **Research Feed** lists saved searches and notable simulated matches. Faircloth OS is not connected.
+- **Trade Journal** stores date, ticker, strategy, entry, exit, notes, tags, and outcome in the local database, with a win-rate summary and CSV export.
 
-Confirmed PMCC relationships are reviewed on Overview. They are not created by an automated builder. Streaming quotes are not opened at startup. OptionScout never routes an order.
+Confirmed PMCC relationships are reviewed on Overview. PMCC Builder saves a hypothetical plan in the local database. It does not create a brokerage position. Streaming quotes are not opened at startup. OptionScout never routes an order.
 
 ## Screenshots
 
@@ -59,7 +66,7 @@ These pictures are from the simulated book and simulated research. They are not 
 
 You need Docker Desktop, or another Docker engine with Compose v2. You do not need a brokerage account to try OptionScout.
 
-This path was verified on Windows 11 with PowerShell and Docker Desktop. The macOS and Linux script is included and has had its syntax checked, but it has not been run through a full install on those systems. Do not treat that script as verified support.
+This path was verified on Windows 11 with PowerShell and Docker Desktop. On Linux with Docker, `sh scripts/setup.sh --container optionscout-linux --port 3197` created `secrets/tastytrade.env` from the blank template when that file was missing and printed `docker exec -it optionscout-linux`. Running the same command with `--start` built the image and started that container. A health check on `http://127.0.0.1:3197/api/health` reported demo mode with orders disabled. The passphrase command printed by the script uses the container name from `--container` (default `optionscout`).
 
 1. Clone OptionScout.
 2. Run the setup script for your system.
@@ -77,13 +84,21 @@ docker compose exec -it optionscout node apps/api/dist/owner-setup.js
 
 Then open [http://127.0.0.1:3180](http://127.0.0.1:3180). The Overview loads immediately. Sign in on Broker & Data with the passphrase you just created before you start a search.
 
-The macOS/Linux commands, which are unverified end to end, are:
+On macOS or Linux, `--start` builds and starts the container. Without `--start`, the script only prepares the blank secret file and prints the next command.
 
 ```sh
-sh scripts/setup.sh
-docker compose up -d --build
-docker compose exec -it optionscout node apps/api/dist/owner-setup.js
+sh scripts/setup.sh --start
+docker exec -it optionscout node apps/api/dist/owner-setup.js
 ```
+
+A second copy can set the container name. The success text uses that name:
+
+```sh
+sh scripts/setup.sh --container optionscout-fresh --port 3197 --start
+docker exec -it optionscout-fresh node apps/api/dist/owner-setup.js
+```
+
+You can skip the passphrase and still read Overview. Create one when you want saved rules, bookmarks, or a search. `PUBLIC_SIMULATED_DEMO=true` is the explicit opt-in that allows a simulated `DEMO` search from a non-loopback host without that passphrase. It does not load broker credentials, and it refuses order routes and broker changes. Leave it unset for a normal local install.
 
 The app is published only on your computer, at [http://127.0.0.1:3180](http://127.0.0.1:3180). Port 3180 is the default. To use another local port for a second copy:
 
@@ -107,7 +122,7 @@ A healthy response has `"status":"ok"` and `"ordersEnabled":false`. `"demo":true
 
 ### Create your passphrase
 
-The simulated Overview is visible before sign-in. Searches, saved strategies, and bookmarks require a local owner passphrase. OptionScout does not ship with a password.
+The simulated Overview is visible before sign-in. Searches, saved strategies, and bookmarks require a local owner passphrase unless `PUBLIC_SIMULATED_DEMO=true`. OptionScout does not ship with a password. The setup script does not ask for the passphrase. Create it only when you want those signed-in features.
 
 After the container is healthy:
 

@@ -17,6 +17,7 @@ import {
   type HoldingsMappableRole,
   portfolioSchema,
   sessionViewSchema,
+  watchlistQuotesResponseSchema,
   settingsSchema,
   settingsUpdateSchema,
   strategyConfirmSchema,
@@ -32,6 +33,7 @@ import {
   type Portfolio,
   type ScanMorePriority,
   type SessionView,
+  type WatchlistQuotesResponse,
   type SettingsUpdate,
   type SettingsView,
   type SmartScanPolicy,
@@ -45,6 +47,12 @@ import {
   type ResearchUiPrefs,
   researchRestoreSchema,
   researchSessionListSchema,
+  demoChainSchema,
+  tradeJournalEntrySchema,
+  tradeJournalListSchema,
+  type DemoChain,
+  type TradeJournalEntry,
+  type TradeJournalWrite,
 } from '@optionscout/shared';
 import { z } from 'zod';
 
@@ -105,6 +113,28 @@ export function fetchSettings(): Promise<SettingsView> {
 
 export async function fetchSession(): Promise<SessionView> {
   return rememberSession(await requestJson('/api/session', sessionViewSchema));
+}
+
+export async function setupOwner(passphrase: string, confirm: string): Promise<SessionView> {
+  const response = await fetch('/api/owner/setup', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passphrase, confirm }),
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+  const parsed = sessionViewSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('The local API returned an unexpected payload.');
+  }
+  return rememberSession(parsed.data);
+}
+
+export function fetchWatchlistQuotes(symbols: readonly string[]): Promise<WatchlistQuotesResponse> {
+  const query = symbols.map((symbol) => encodeURIComponent(symbol)).join(',');
+  return requestJson(`/api/market-data/watchlist-quotes?symbols=${query}`, watchlistQuotesResponseSchema);
 }
 
 export async function login(passphrase: string): Promise<SessionView> {
@@ -528,7 +558,7 @@ const holdingsPreviewResponseSchema = z
   .object({
     headers: z.array(z.string()),
     headerLine: z.number(),
-    mapping: z.record(z.enum(['ticker', 'name', 'sector', 'weight', 'assetClass', 'ignore'])),
+    mapping: z.record(z.string(), z.enum(['ticker', 'name', 'sector', 'weight', 'assetClass', 'ignore'])),
     rows: z.array(
       z
         .object({
@@ -616,6 +646,37 @@ export function commitHoldingsCsvImport(body: {
       ),
     },
   );
+}
+
+export function fetchDemoChain(): Promise<DemoChain> {
+  return requestJson('/api/research/demo-chain', demoChainSchema);
+}
+
+export function fetchTradeJournal(): Promise<{ entries: TradeJournalEntry[]; summary: { count: number; wins: number; losses: number; open: number; scratch: number; winRate: string | null; totalEstimatedPnl: string } }> {
+  return requestJson('/api/journal', tradeJournalListSchema);
+}
+
+export function createTradeJournalEntry(body: TradeJournalWrite): Promise<TradeJournalEntry> {
+  return requestJson('/api/journal', tradeJournalEntrySchema, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateTradeJournalEntry(id: string, body: TradeJournalWrite): Promise<TradeJournalEntry> {
+  return requestJson(`/api/journal/${encodeURIComponent(id)}`, tradeJournalEntrySchema, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteTradeJournalEntry(id: string): Promise<void> {
+  const headers = new Headers();
+  if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+  const response = await fetch(`/api/journal/${encodeURIComponent(id)}`, { method: 'DELETE', headers, credentials: 'include' });
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export function retrySmartScanCompanies(

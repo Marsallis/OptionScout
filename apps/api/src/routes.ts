@@ -13,6 +13,7 @@ import {
   holdingsCommitRequestSchema,
   holdingsPreviewRequestSchema,
   normalizeTickerList,
+  validateTickerSymbol,
   smartScanMoreRequestSchema,
   smartScanNextCompaniesRequestSchema,
   smartScanRequestSchema,
@@ -23,6 +24,8 @@ import {
   importedPositionSchema,
   importedTransactionSchema,
   loginRequestSchema,
+  ownerSetupRequestSchema,
+  watchlistQuotesResponseSchema,
   quoteSnapshotSchema,
   sessionViewSchema,
   syncRequestSchema,
@@ -31,7 +34,8 @@ import {
   researchRestoreSchema,
 } from '@optionscout/shared';
 import type { Express, Request, Response } from 'express';
-import { checkOwnerPassphrase, ownerIsConfigured } from './auth/owner.js';
+import { checkOwnerPassphrase, ownerIsConfigured, setupOwnerPassphrase } from './auth/owner.js';
+import { PassphraseError } from './auth/passphrase.js';
 import { loginIsLocked, recordLoginAttempt } from './auth/rate-limit.js';
 import {
   assertCsrf,
@@ -92,6 +96,7 @@ import {
 } from './finder/universes.js';
 import { commitHoldingsImport, previewHoldingsImport } from './finder/holdings-import.js';
 import { assertLoopbackRequest, HttpError } from './http.js';
+import { registerDeskRoutes } from './research/desk-routes.js';
 import { readSettings, updateSettings } from './services/settings.js';
 import {
   StrategyProfileError,
@@ -122,6 +127,13 @@ import {
 } from './brokerage/connection.js';
 import { refreshBrokerConnection } from './context.js';
 import { openLiveDxlinkSocket } from './marketdata/live-socket.js';
+import {
+  readCachedWatchlistQuotes,
+  readOnlyEquityQuotes,
+  rememberWatchlistQuotes,
+  simulatedWatchlistQuote,
+  WATCHLIST_QUOTE_LIMIT,
+} from './marketdata/watchlist-quotes.js';
 import type { SettingsUpdate } from '@optionscout/shared';
 import { ZodError } from 'zod';
 
@@ -129,7 +141,30 @@ function sessionFrom(req: Request, context: AppContext): OwnerSession | null {
   return findOwnerSession(context.database.db, readSessionCookie(req.get('cookie')));
 }
 
+function publicResearchRequest(req: Request, context: AppContext): boolean {
+  if (!context.config.publicSimulatedDemo) return false;
+  const path = (req.originalUrl.split('?')[0] ?? '').toLowerCase();
+  const method = req.method.toUpperCase();
+  if (path.startsWith('/api/finder/')) return true;
+  if (path.startsWith('/api/journal')) return true;
+  if (path.startsWith('/api/saved-ideas')) return true;
+  if (path.startsWith('/api/research/')) return true;
+  if (path.startsWith('/api/strategy-profiles') && (method === 'GET' || method === 'HEAD')) return true;
+  if (path.startsWith('/api/research-sessions') && (method === 'GET' || method === 'HEAD')) return true;
+  if (path.startsWith('/api/discovery/universes') && (method === 'GET' || method === 'HEAD')) return true;
+  return false;
+}
+
+function publicDemoSession(): OwnerSession {
+  return {
+    id: 'public-simulated-demo',
+    csrfHash: '',
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  };
+}
+
 export function requireMutationSession(req: Request, context: AppContext): OwnerSession | null {
+  if (publicResearchRequest(req, context)) return publicDemoSession();
   assertLoopbackRequest(req, true);
   const token = readSessionCookie(req.get('cookie'));
   if (!token) {
@@ -144,6 +179,7 @@ export function requireMutationSession(req: Request, context: AppContext): Owner
 }
 
 function requireSession(req: Request, context: AppContext): OwnerSession {
+  if (publicResearchRequest(req, context)) return publicDemoSession();
   const session = sessionFrom(req, context);
   if (!session) {
     throw new HttpError(401, 'Sign in required.');
@@ -301,19 +337,40 @@ export function respondWithoutWaiting(query: Request['query']): boolean {
   return wait === 'false' || wait === '0';
 }
 
+function sessionPayload(context: AppContext, session: OwnerSession | null, csrfToken: string | null) {
+  return sessionViewSchema.parse({
+    authenticated: Boolean(session),
+    ownerConfigured: ownerIsConfigured(context.database.db),
+    expiresAt: session?.expiresAt ?? null,
+    csrfToken,
+    publicSimulatedDemo: context.config.publicSimulatedDemo,
+  });
+}
+
 export function registerRoutes(app: Express, context: AppContext): void {
+  app.use((req, res, next) => {
+    if (!context.config.publicSimulatedDemo) {
+      next();
+      return;
+    }
+    const path = (req.originalUrl.split('?')[0] ?? '').toLowerCase();
+    const method = req.method.toUpperCase();
+    if (path.includes('/orders') || path.includes('/order-')) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && (path.startsWith('/api/broker') || path.startsWith('/api/market-data'))) {
+      res.status(403).json({ error: 'Public simulated demo refuses broker and credential changes.' });
+      return;
+    }
+    next();
+  });
+
   app.get('/api/session', (req, res, next) => {
     try {
       const session = sessionFrom(req, context);
       const csrfToken = session ? rotateCsrf(context.database.db, session.id) : null;
-      res.json(
-        sessionViewSchema.parse({
-          authenticated: Boolean(session),
-          ownerConfigured: ownerIsConfigured(context.database.db),
-          expiresAt: session?.expiresAt ?? null,
-          csrfToken,
-        }),
-      );
+      res.json(sessionPayload(context, session, csrfToken));
     } catch (error) {
       next(error);
     }
@@ -343,14 +400,110 @@ export function registerRoutes(app: Express, context: AppContext): void {
       recordLoginAttempt(context.database.db, true);
       const created = createOwnerSession(context.database.db);
       writeSessionCookie(res, created.token);
-      res.json(
-        sessionViewSchema.parse({
-          authenticated: true,
-          ownerConfigured: true,
-          expiresAt: created.expiresAt,
-          csrfToken: created.csrfToken,
-        }),
-      );
+      res.json(sessionPayload(context, { id: created.token, csrfHash: '', expiresAt: created.expiresAt }, created.csrfToken));
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/owner/setup', (req, res, next) => {
+    try {
+      if (context.config.publicSimulatedDemo) {
+        res.status(403).json({ error: 'This preview stays on the simulated book and does not store a passphrase.' });
+        return;
+      }
+      assertLoopbackRequest(req, true);
+      if (ownerIsConfigured(context.database.db)) {
+        res.status(409).json({ error: 'An owner passphrase is already stored.' });
+        return;
+      }
+      const parsed = ownerSetupRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Passphrase setup was rejected.' });
+        return;
+      }
+      if (parsed.data.passphrase !== parsed.data.confirm) {
+        res.status(400).json({ error: 'The passphrase entries did not match.' });
+        return;
+      }
+      try {
+        setupOwnerPassphrase(context.database.db, parsed.data.passphrase);
+      } catch (error) {
+        if (error instanceof PassphraseError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        throw error;
+      }
+      const created = createOwnerSession(context.database.db);
+      writeSessionCookie(res, created.token);
+      res.json(sessionPayload(context, { id: created.token, csrfHash: '', expiresAt: created.expiresAt }, created.csrfToken));
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.get('/api/market-data/watchlist-quotes', async (req, res, next) => {
+    try {
+      const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
+      const requested = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      if (requested.length > WATCHLIST_QUOTE_LIMIT) {
+        res.status(400).json({ error: `Ask for at most ${WATCHLIST_QUOTE_LIMIT} symbols at a time.` });
+        return;
+      }
+      const symbols: string[] = [];
+      for (const item of requested) {
+        const checked = validateTickerSymbol(item);
+        if (!checked.ok) {
+          res.status(400).json({ error: 'One of the symbols was not a stock ticker.' });
+          return;
+        }
+        if (!symbols.includes(checked.ticker)) symbols.push(checked.ticker);
+      }
+      const now = new Date();
+      const key = symbols.join(',');
+      const cached = readCachedWatchlistQuotes(key, now.getTime());
+      if (cached === 'limited') {
+        res.status(429).json({ error: 'Quote refresh is limited. Try again in a few seconds.' });
+        return;
+      }
+      if (cached) {
+        res.json(watchlistQuotesResponseSchema.parse(cached));
+        return;
+      }
+      const useLive =
+        !context.config.publicSimulatedDemo &&
+        context.brokerage != null &&
+        context.brokerConnection.providerAllowed &&
+        !context.brokerConnection.hardDisabled;
+      let quotes;
+      if (useLive) {
+        requireSession(req, context);
+        try {
+          quotes = await readOnlyEquityQuotes(context.brokerage!, symbols, now);
+        } catch {
+          quotes = symbols.map((symbol) => ({
+            symbol,
+            last: null,
+            asOf: null,
+            source: 'unavailable' as const,
+            label: 'Quote unavailable.',
+            ordersEnabled: false as const,
+          }));
+        }
+      } else {
+        quotes = symbols.map((symbol) => simulatedWatchlistQuote(symbol, now));
+      }
+      const payload = watchlistQuotesResponseSchema.parse({
+        quotes,
+        refreshedAt: now.toISOString(),
+        rateLimited: false,
+      });
+      rememberWatchlistQuotes(key, now.getTime(), payload);
+      res.json(payload);
     } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
@@ -364,7 +517,7 @@ export function registerRoutes(app: Express, context: AppContext): void {
       }
       destroySession(context.database.db, session.id);
       clearSessionCookie(res);
-      res.json(sessionViewSchema.parse({ authenticated: false, ownerConfigured: ownerIsConfigured(context.database.db), expiresAt: null, csrfToken: null }));
+      res.json(sessionPayload(context, null, null));
     } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }
@@ -1364,13 +1517,29 @@ export function registerRoutes(app: Express, context: AppContext): void {
       if (!sendKnownError(res, error)) next(error);
     }
   });
+
+  registerDeskRoutes(
+    app,
+    context,
+    (req) => {
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        requireSession(req, context);
+        return;
+      }
+      const session = requireMutationSession(req, context);
+      if (!session) throw new HttpError(401, 'Sign in required.');
+    },
+    sendKnownError,
+  );
 }
 
 function finderDeps(context: AppContext, settings: ReturnType<typeof settingsView>): FinderScanDeps {
   return {
-    liveScanEnabled: effectiveLiveScanEnabled(context.config.finderLiveScan, settings.finderOnDemandSearchEnabled),
+    liveScanEnabled: context.config.publicSimulatedDemo
+      ? false
+      : effectiveLiveScanEnabled(context.config.finderLiveScan, settings.finderOnDemandSearchEnabled),
     brokerage: context.brokerage,
-    portfolioView: settings.portfolioView,
+    portfolioView: context.config.publicSimulatedDemo ? 'demo' : settings.portfolioView,
     readProfile: (profileId) => readStrategyProfile(context.database.db, profileId),
     database: context.database.db,
     persistSqlite: context.database.sqlite,
@@ -1380,9 +1549,11 @@ function finderDeps(context: AppContext, settings: ReturnType<typeof settingsVie
 
 function smartScanDeps(context: AppContext, settings: ReturnType<typeof settingsView>): SmartScanDeps {
   return {
-    smartScanLiveEnabled: context.config.smartScanLive,
-    liveScanEnabled: effectiveLiveScanEnabled(context.config.finderLiveScan, settings.finderOnDemandSearchEnabled),
-    portfolioView: settings.portfolioView,
+    smartScanLiveEnabled: context.config.publicSimulatedDemo ? false : context.config.smartScanLive,
+    liveScanEnabled: context.config.publicSimulatedDemo
+      ? false
+      : effectiveLiveScanEnabled(context.config.finderLiveScan, settings.finderOnDemandSearchEnabled),
+    portfolioView: context.config.publicSimulatedDemo ? 'demo' : settings.portfolioView,
     smartScanMode: settings.smartScanMode,
     brokerage: context.brokerage,
     database: context.database.db,
@@ -1393,6 +1564,9 @@ function smartScanDeps(context: AppContext, settings: ReturnType<typeof settings
 }
 
 export function applySettingsUpdate(req: Request, context: AppContext, update: SettingsUpdate) {
+  if (context.config.publicSimulatedDemo && (update.portfolioView === 'brokerage' || update.finderOnDemandSearchEnabled === true)) {
+    throw new HttpError(403, 'Public simulated demo refuses broker and live-data changes.');
+  }
   const session = requireMutationSession(req, context);
   if (update.portfolioView === 'brokerage' && !session) {
     throw new HttpError(401, 'Sign in required.');
