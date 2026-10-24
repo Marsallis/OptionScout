@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The public website build compiles a demo lock into the server. Environment variables and query parameters cannot turn on a live broker, a passphrase, or orders. The site links to the local install instructions for a private brokerage connection.
 - A setup wizard starts on the simulated book, can save a local passphrase, and explains a personal read-only tastytrade grant. The public preview does not store a passphrase or a grant. Watchlist symbols show a simulated quote unless a read-only session is connected. Overview says Simulated or Connected, with the last update time. The payoff chart has a text summary. Phone width keeps a short path and the colorway control on the top bar. Orders stay off.
 - The desk has a beginner welcome guide, a Beginner/Pro switch, a glossary, a watchlist, and five colorways saved in the browser. Orders stay off.
 - Startup loads the dashboard, broker status, settings, and session separately. A failed section shows its own Retry button.

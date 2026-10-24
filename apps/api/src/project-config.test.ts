@@ -42,6 +42,10 @@ describe('repository configuration', () => {
     expect(compose).toMatch(/TASTYTRADE_SCHEDULED_SYNC:\s*"false"/);
     expect(compose).toMatch(/TASTYTRADE_ENABLE_LIVE:\s*"\$\{TASTYTRADE_ENABLE_LIVE:-false\}"/);
     expect(read('docker/Dockerfile')).toContain('DATABASE_PATH=/data/optionscout.sqlite');
+    const hosted = read('docker/Dockerfile.hosted');
+    expect(hosted).toContain('cp apps/api/src/hosted-lock.public.ts apps/api/src/hosted-lock.ts && npm run build');
+    expect(read('apps/api/src/hosted-lock.ts')).toContain('export const hostedPublicDemo = false');
+    expect(read('apps/api/src/hosted-lock.public.ts')).toContain('export const hostedPublicDemo = true');
   });
 
   it('keeps secrets and database files out of git and sample env', () => {

@@ -487,6 +487,7 @@ export const healthSchema = z
     scheduledSyncEnabled: z.literal(false),
     ownerConfigured: z.boolean(),
     publicSimulatedDemo: z.boolean().default(false),
+    hostedPublicDemo: z.boolean().default(false),
   })
   .strict();
 

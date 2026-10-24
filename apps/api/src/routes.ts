@@ -347,13 +347,33 @@ function sessionPayload(context: AppContext, session: OwnerSession | null, csrfT
   });
 }
 
+function requestPath(req: Request): string {
+  return (req.originalUrl.split('?')[0] ?? '').toLowerCase();
+}
+
+/** Login, passphrase, grant, and broker writes do not exist on the hosted demo. */
+function hostedDemoRefuses(req: Request): boolean {
+  const path = requestPath(req);
+  const method = req.method.toUpperCase();
+  if (path.includes('/orders') || path.includes('/order-')) return true;
+  if (path === '/api/owner/setup' || path.startsWith('/api/owner/')) return true;
+  if (path === '/api/session' && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') return true;
+  if (path.startsWith('/api/broker') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') return true;
+  if (path.startsWith('/api/market-data') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') return true;
+  return false;
+}
+
 export function registerRoutes(app: Express, context: AppContext): void {
   app.use((req, res, next) => {
+    if (context.config.hostedPublicDemo && hostedDemoRefuses(req)) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     if (!context.config.publicSimulatedDemo) {
       next();
       return;
     }
-    const path = (req.originalUrl.split('?')[0] ?? '').toLowerCase();
+    const path = requestPath(req);
     const method = req.method.toUpperCase();
     if (path.includes('/orders') || path.includes('/order-')) {
       res.status(404).json({ error: 'Not found' });

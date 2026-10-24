@@ -33,6 +33,7 @@ import { useExperienceMode } from '../brand/ExperienceMode';
 import { Wordmark } from '../brand/Wordmark';
 import { brand } from '../brand/tokens';
 import { AdviceNote } from '../components/AdviceNote';
+import { LocalInstallNote } from '../components/LocalInstallNote';
 import { DemoBanner } from '../components/DemoBanner';
 import { GlossaryDialog } from '../components/GlossaryDialog';
 import { ThemePicker } from '../components/ThemePicker';
@@ -256,6 +257,9 @@ export function AppShell() {
         )}
         <DemoBanner />
         <AdviceNote />
+        <Box sx={{ px: { xs: 2, md: 3 }, pt: 1.5 }}>
+          <LocalInstallNote />
+        </Box>
         <Box id="main" key={pathname} className="os-page" component="main" sx={{ p: { xs: 2, sm: 2.5, md: 4 }, flex: 1, minWidth: 0 }}>
           <Routes>
             <Route path="/" element={<OverviewPage />} />

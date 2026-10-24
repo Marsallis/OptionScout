@@ -22,6 +22,7 @@ export function SettingsPage() {
   const experience = useExperienceMode();
   const [message, setMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated);
+  const publicDemo = session?.publicSimulatedDemo === true;
 
   if (settingsStatus === 'loading' || !settings) {
     if (settingsStatus === 'error') {
@@ -110,7 +111,7 @@ export function SettingsPage() {
           }}
         >
           <FormControlLabel value="demo" control={<Radio />} label="Synthetic demo book" />
-          <FormControlLabel value="brokerage" control={<Radio />} label="Authenticated brokerage account" />
+          {publicDemo ? null : <FormControlLabel value="brokerage" control={<Radio />} label="Authenticated brokerage account" />}
         </RadioGroup>
         <Typography variant="h6" sx={{ mt: 3 }}>
           LEAPS Finder searches
@@ -205,7 +206,7 @@ export function SettingsPage() {
         <Stack spacing={0.75} sx={{ mt: 1.5 }}>
           <LockedRow label="Data mode" value="Demo book stays available" />
           <LockedRow label="Authentication" value="Local owner passphrase" />
-          <LockedRow label="Live brokerage" value="Disabled until you enable it" />
+          <LockedRow label="Live brokerage" value={publicDemo ? 'Not available on this public site' : 'Disabled until you enable it'} />
           <LockedRow label="Scheduled sync" value="Disabled" />
           <LockedRow label="Order routing" value="Disabled" />
           <LockedRow label="Telemetry" value="Disabled" />
