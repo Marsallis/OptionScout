@@ -247,7 +247,10 @@ export function AppShell() {
           </Toolbar>
         )}
         {desktop ? null : (
-          <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ px: 1, py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ overflowX: 'auto' }}>
+              <ThemePicker compact bar />
+            </Box>
             <ExperienceToggle />
           </Box>
         )}

@@ -17,9 +17,12 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { useExperienceMode } from '../brand/ExperienceMode';
 import { DemoChip } from '../components/DemoChip';
 import { FirstRunGuide } from '../components/FirstRunGuide';
+import { SetupWizard } from '../components/SetupWizard';
 import { PayoffSketch } from '../components/PayoffSketch';
 import { SectionNotice } from '../components/SectionNotice';
 import { WatchlistCard } from '../components/WatchlistCard';
@@ -31,8 +34,11 @@ import { BrokerageOverview } from './BrokeragePages';
 const SHORT_CALL_ACTIONS = new Set(['sell_to_open', 'buy_to_close', 'sell_to_close', 'expire']);
 
 export function OverviewPage() {
-  const { dashboardStatus, dashboardError, dashboard, settings, settingsError, retryDashboard, retrySettings } = useAppState();
+  const { dashboardStatus, dashboardError, dashboard, broker, settings, settingsError, retryDashboard, retrySettings } = useAppState();
   const { mode: experience } = useExperienceMode();
+  const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down('md'));
+  const [fullBook, setFullBook] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
   const [positionQuery, setPositionQuery] = useState('');
   const [positionSort, setPositionSort] = useState<'book' | 'az' | 'za'>('book');
@@ -66,6 +72,8 @@ export function OverviewPage() {
     return <BrokerageOverview />;
   }
 
+  const connected = broker?.connection.state === 'connected' && broker.authenticated;
+  const sessionUpdated = broker?.connection.lastSuccessAt ?? broker?.quotes.fetchedAt ?? broker?.quotes.asOf ?? null;
   const showGreeks = settings?.showGreeks ?? true;
   const dense = settings?.density === 'compact';
   const shortCalls = dashboard.transactions.filter((transaction) => SHORT_CALL_ACTIONS.has(transaction.action));
@@ -91,17 +99,28 @@ export function OverviewPage() {
           Connection
         </Typography>
         <Typography variant="body1" sx={{ mt: 0.5 }}>
-          {dashboard.brokerage.label}
+          {connected ? 'Connected. Read-only.' : 'Simulated. Not connected.'}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Orders are off. Last updated {formatSnapshot(dashboard.asOf)}.
+          Orders are off. Last updated {formatSnapshot(connected && sessionUpdated ? sessionUpdated : dashboard.asOf)}.
+          {connected ? ' This time is from the read-only brokerage session.' : ' This time is the simulated book.'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          {dashboard.brokerage.label}
         </Typography>
       </Paper>
 
+      <SetupWizard />
       {experience === 'beginner' ? <FirstRunGuide /> : null}
       {experience === 'beginner' ? <PayoffSketch /> : null}
       <WatchlistCard />
-
+      {phone ? (
+        <Button aria-expanded={fullBook} onClick={() => setFullBook((open) => !open)} sx={{ alignSelf: 'flex-start' }}>
+          {fullBook ? 'Hide the full book' : 'Show the full book'}
+        </Button>
+      ) : null}
+      {!phone || fullBook ? (
+      <>
       {settingsError ? <SectionNotice title="Settings did not load." message={settingsError} onRetry={retrySettings} /> : null}
       <Paper data-testid="home-intro" sx={{ p: { xs: 2, md: 3 }, backgroundImage: 'none' }}>
         <Typography variant="overline" color="primary.main">
@@ -405,7 +424,7 @@ export function OverviewPage() {
                     {item.underlying}
                   </Typography>
                   <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatUsd(item.demoLast)}
+                    {formatUsd(item.demoLast)} simulated
                   </Typography>
                 </Stack>
                 <Typography variant="caption" color="text.secondary">
@@ -444,6 +463,8 @@ export function OverviewPage() {
           </Stack>
         </Panel>
       </Box>
+      </>
+      ) : null}
     </Stack>
   );
 }
@@ -472,7 +493,7 @@ function BrokerCard({ dashboard }: { dashboard: Dashboard }) {
         <DemoChip />
       </Stack>
       <Typography variant="body2" sx={{ fontWeight: 650 }}>
-        {dashboard.brokerage.connectionStatus === 'demo-only' ? 'Demo only' : dashboard.brokerage.connectionStatus}
+        {dashboard.brokerage.connectionStatus === 'demo-only' ? 'Simulated. Not connected.' : dashboard.brokerage.connectionStatus}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
         {dashboard.brokerage.label}

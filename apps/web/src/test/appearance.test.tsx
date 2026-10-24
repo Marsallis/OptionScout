@@ -23,6 +23,22 @@ describe('beginner desk appearance', () => {
         if (url.endsWith('/api/dashboard')) return jsonResponse(dashboardFixture);
         if (url.endsWith('/api/broker')) return jsonResponse(brokerFixture);
         if (url.endsWith('/api/settings')) return jsonResponse(settingsFixture);
+        if (url.includes('/api/market-data/watchlist-quotes')) {
+          return jsonResponse({
+            quotes: [
+              {
+                symbol: 'AAPL',
+                last: 189.25,
+                asOf: '2026-10-15T20:00:00.000Z',
+                source: 'simulated',
+                label: 'Simulated quote. Not a live price.',
+                ordersEnabled: false,
+              },
+            ],
+            refreshedAt: '2026-10-15T20:00:00.000Z',
+            rateLimited: false,
+          });
+        }
         return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
       }),
     );
@@ -73,5 +89,7 @@ describe('beginner desk appearance', () => {
     expect(await within(watchlist).findByRole('button', { name: 'Remove AAPL' })).toBeInTheDocument();
     expect(within(watchlist).getByText('AAPL')).toBeInTheDocument();
     expect(within(watchlist).queryByText(/No symbols yet/)).not.toBeInTheDocument();
+    expect(await within(watchlist).findByText('Simulated quote. Not a live price.')).toBeInTheDocument();
+    expect(within(watchlist).getByText('$189.25')).toBeInTheDocument();
   });
 });

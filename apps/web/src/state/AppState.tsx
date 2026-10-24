@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { BrokerOverview, Dashboard, SessionView, SettingsUpdate, SettingsView } from '@optionscout/shared';
-import { fetchBroker, fetchDashboard, fetchSession, fetchSettings, login, logout, saveSettings, selectBrokerAccount, syncBroker } from '../api/client';
+import { fetchBroker, fetchDashboard, fetchSession, fetchSettings, login, logout, saveSettings, selectBrokerAccount, setupOwner, syncBroker } from '../api/client';
 
 type SectionStatus = 'loading' | 'ready' | 'error';
 
@@ -21,6 +21,7 @@ interface AppStateValue {
   session: SessionView | null;
   savePreferences: (update: SettingsUpdate) => Promise<void>;
   signIn: (passphrase: string) => Promise<void>;
+  createPassphrase: (passphrase: string, confirm: string) => Promise<void>;
   signOut: () => Promise<void>;
   syncNow: (request: { transactions?: { mode: 'recent' | 'backfill'; startDate?: string } }) => Promise<BrokerOverview>;
   chooseAccount: (accountId: string) => Promise<void>;
@@ -176,6 +177,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           setBrokerError(message(reason, 'Broker status is unavailable.'));
           setBrokerStatus('error');
         }
+      },
+      async createPassphrase(passphrase, confirm) {
+        const nextSession = await setupOwner(passphrase, confirm);
+        setSession(nextSession);
+        setSessionStatus('ready');
+        setSessionError(null);
       },
       async signIn(passphrase) {
         const nextSession = await login(passphrase);

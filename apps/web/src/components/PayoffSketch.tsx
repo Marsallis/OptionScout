@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import { GlossaryTip } from './GlossaryTip';
@@ -88,6 +93,40 @@ export function PayoffSketch({ strike = 100, premium = 5 }: { strike?: number; p
           </Typography>
         </Paper>
       </Stack>
+      <Table size="small" aria-label="Payoff summary" sx={{ mt: 2 }}>
+        <caption style={{ captionSide: 'top', textAlign: 'left', paddingBottom: 8 }}>
+          Payoff summary. Max loss, breakeven, and the shape of the profit.
+        </caption>
+        <TableHead>
+          <TableRow>
+            <TableCell scope="col">Point</TableCell>
+            <TableCell scope="col">Share price</TableCell>
+            <TableCell scope="col">Profit or loss</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          <TableRow>
+            <TableCell component="th" scope="row">Max loss</TableCell>
+            <TableCell>At or below ${strike}</TableCell>
+            <TableCell>-${maxLoss.toLocaleString('en-US')}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell component="th" scope="row">Breakeven</TableCell>
+            <TableCell>${breakeven}</TableCell>
+            <TableCell>$0</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell component="th" scope="row">Example gain</TableCell>
+            <TableCell>${breakeven + 10}</TableCell>
+            <TableCell>+$1,000</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell component="th" scope="row">Max profit</TableCell>
+            <TableCell>No upper limit in this example</TableCell>
+            <TableCell>Rises with the share price after breakeven</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Example long-call payoff chart" style={{ width: '100%', height: 'auto', marginTop: 12 }}>
         <line x1="12" y1={y(0)} x2={width - 12} y2={y(0)} stroke="currentColor" strokeOpacity="0.35" />
         <polyline className="os-line-draw" fill="none" stroke={theme.palette.primary.main} strokeWidth="2.5" points={line} />

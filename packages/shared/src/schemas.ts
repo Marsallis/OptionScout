@@ -334,6 +334,32 @@ export const loginRequestSchema = z
   })
   .strict();
 
+export const ownerSetupRequestSchema = z
+  .object({
+    passphrase: z.string().min(1).max(200),
+    confirm: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const watchlistQuoteSchema = z
+  .object({
+    symbol: z.string().min(1),
+    last: z.number().positive().nullable(),
+    asOf: z.string().datetime().nullable(),
+    source: z.enum(['simulated', 'tastytrade', 'unavailable']),
+    label: z.string().min(1),
+    ordersEnabled: z.literal(false),
+  })
+  .strict();
+
+export const watchlistQuotesResponseSchema = z
+  .object({
+    quotes: z.array(watchlistQuoteSchema),
+    refreshedAt: z.string().datetime(),
+    rateLimited: z.boolean(),
+  })
+  .strict();
+
 export const accountSelectionSchema = z
   .object({
     accountId: z.string().min(1),
@@ -690,6 +716,8 @@ export type SettingsView = z.infer<typeof settingsSchema>;
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 export type HealthResponse = z.infer<typeof healthSchema>;
 export type SessionView = z.infer<typeof sessionViewSchema>;
+export type WatchlistQuote = z.infer<typeof watchlistQuoteSchema>;
+export type WatchlistQuotesResponse = z.infer<typeof watchlistQuotesResponseSchema>;
 export type ImportedPosition = z.infer<typeof importedPositionSchema>;
 export type ImportedTransaction = z.infer<typeof importedTransactionSchema>;
 export type QuoteSnapshotView = z.infer<typeof quoteSnapshotSchema>;

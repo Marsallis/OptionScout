@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { parseConfig } from './config.js';
 import { openAppContext, type AppContext } from './context.js';
+import { resetWatchlistQuoteCache } from './marketdata/watchlist-quotes.js';
 
 const contexts: AppContext[] = [];
 const directories: string[] = [];
@@ -140,5 +141,76 @@ describe('demo API', () => {
       portfolioView: 'demo',
       ordersEnabled: false,
     });
+  });
+
+  it('stores a passphrase hash without echoing the passphrase', async () => {
+    const passphrase = 'correct horse battery staple';
+    const context = await boot();
+    const agent = request.agent(createApp(context));
+    const created = await agent
+      .post('/api/owner/setup')
+      .set('Origin', 'http://127.0.0.1')
+      .send({ passphrase, confirm: passphrase });
+    expect(created.status).toBe(200);
+    expect(created.body).toMatchObject({ authenticated: true, ownerConfigured: true, publicSimulatedDemo: false });
+    expect(JSON.stringify(created.body)).not.toContain(passphrase);
+    expect(JSON.stringify(created.body)).not.toContain('scrypt$');
+    const session = await agent.get('/api/session');
+    expect(session.body.authenticated).toBe(true);
+    const again = await agent.post('/api/owner/setup').set('Origin', 'http://127.0.0.1').send({ passphrase, confirm: passphrase });
+    expect(again.status).toBe(409);
+    expect(JSON.stringify(again.body)).not.toContain(passphrase);
+  });
+
+  it('refuses a passphrase on the public simulated preview', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'optionscout-api-'));
+    directories.push(directory);
+    const config = parseConfig({
+      NODE_ENV: 'test',
+      PORT: '3180',
+      BIND_HOST: '127.0.0.1',
+      DATABASE_PATH: path.join(directory, 'optionscout.sqlite'),
+      DATA_MODE: 'demo',
+      AUTH_MODE: 'local-owner',
+      ENABLE_ORDER_EXECUTION: 'false',
+      TELEMETRY_ENABLED: 'false',
+      RUNNING_IN_DOCKER: 'false',
+      STATIC_DIR: '',
+      PUBLIC_SIMULATED_DEMO: 'true',
+    });
+    const context = await openAppContext(config);
+    contexts.push(context);
+    const response = await request(createApp(context))
+      .post('/api/owner/setup')
+      .set('Host', 'preview.example.test')
+      .set('Origin', 'https://preview.example.test')
+      .send({ passphrase: 'correct horse battery staple', confirm: 'correct horse battery staple' });
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/simulated book/i);
+    expect(JSON.stringify(response.body)).not.toContain('correct horse');
+  });
+
+  it('serves simulated watchlist quotes and limits repeat refreshes', async () => {
+    resetWatchlistQuoteCache();
+    const context = await boot();
+    const app = createApp(context);
+    const first = await request(app).get('/api/market-data/watchlist-quotes?symbols=aapl,msft');
+    expect(first.status).toBe(200);
+    expect(first.body.rateLimited).toBe(false);
+    expect(first.body.quotes).toHaveLength(2);
+    expect(first.body.quotes[0]).toMatchObject({
+      symbol: 'AAPL',
+      source: 'simulated',
+      ordersEnabled: false,
+    });
+    expect(first.body.quotes[0].label).toMatch(/Simulated quote/);
+    expect(first.body.quotes[0].last).toBeGreaterThan(0);
+    const second = await request(app).get('/api/market-data/watchlist-quotes?symbols=AAPL,MSFT');
+    expect(second.status).toBe(200);
+    expect(second.body.rateLimited).toBe(true);
+    expect(second.body.quotes[0].last).toBe(first.body.quotes[0].last);
+    const other = await request(app).get('/api/market-data/watchlist-quotes?symbols=NVDA');
+    expect(other.status).toBe(429);
+    resetWatchlistQuoteCache();
   });
 });

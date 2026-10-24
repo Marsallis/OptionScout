@@ -245,7 +245,23 @@ export function createAppTheme(mode: PaletteMode, colorway: ColorwayId = 'defaul
       },
       MuiChip: {
         styleOverrides: {
-          root: { fontWeight: 650 },
+          root: { fontWeight: 650, color: color.text },
+          outlined: { borderColor: color.border, color: color.text },
+          colorSuccess: {
+            backgroundColor: 'transparent',
+            color: color.positive,
+            border: `1px solid ${color.positive}`,
+          },
+          colorWarning: {
+            backgroundColor: 'transparent',
+            color: color.warning,
+            border: `1px solid ${color.warning}`,
+          },
+          colorError: {
+            backgroundColor: 'transparent',
+            color: color.negative,
+            border: `1px solid ${color.negative}`,
+          },
         },
       },
     },

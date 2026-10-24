@@ -13,6 +13,7 @@ import {
   holdingsCommitRequestSchema,
   holdingsPreviewRequestSchema,
   normalizeTickerList,
+  validateTickerSymbol,
   smartScanMoreRequestSchema,
   smartScanNextCompaniesRequestSchema,
   smartScanRequestSchema,
@@ -23,6 +24,8 @@ import {
   importedPositionSchema,
   importedTransactionSchema,
   loginRequestSchema,
+  ownerSetupRequestSchema,
+  watchlistQuotesResponseSchema,
   quoteSnapshotSchema,
   sessionViewSchema,
   syncRequestSchema,
@@ -31,7 +34,8 @@ import {
   researchRestoreSchema,
 } from '@optionscout/shared';
 import type { Express, Request, Response } from 'express';
-import { checkOwnerPassphrase, ownerIsConfigured } from './auth/owner.js';
+import { checkOwnerPassphrase, ownerIsConfigured, setupOwnerPassphrase } from './auth/owner.js';
+import { PassphraseError } from './auth/passphrase.js';
 import { loginIsLocked, recordLoginAttempt } from './auth/rate-limit.js';
 import {
   assertCsrf,
@@ -123,6 +127,13 @@ import {
 } from './brokerage/connection.js';
 import { refreshBrokerConnection } from './context.js';
 import { openLiveDxlinkSocket } from './marketdata/live-socket.js';
+import {
+  readCachedWatchlistQuotes,
+  readOnlyEquityQuotes,
+  rememberWatchlistQuotes,
+  simulatedWatchlistQuote,
+  WATCHLIST_QUOTE_LIMIT,
+} from './marketdata/watchlist-quotes.js';
 import type { SettingsUpdate } from '@optionscout/shared';
 import { ZodError } from 'zod';
 
@@ -390,6 +401,109 @@ export function registerRoutes(app: Express, context: AppContext): void {
       const created = createOwnerSession(context.database.db);
       writeSessionCookie(res, created.token);
       res.json(sessionPayload(context, { id: created.token, csrfHash: '', expiresAt: created.expiresAt }, created.csrfToken));
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.post('/api/owner/setup', (req, res, next) => {
+    try {
+      if (context.config.publicSimulatedDemo) {
+        res.status(403).json({ error: 'This preview stays on the simulated book and does not store a passphrase.' });
+        return;
+      }
+      assertLoopbackRequest(req, true);
+      if (ownerIsConfigured(context.database.db)) {
+        res.status(409).json({ error: 'An owner passphrase is already stored.' });
+        return;
+      }
+      const parsed = ownerSetupRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Passphrase setup was rejected.' });
+        return;
+      }
+      if (parsed.data.passphrase !== parsed.data.confirm) {
+        res.status(400).json({ error: 'The passphrase entries did not match.' });
+        return;
+      }
+      try {
+        setupOwnerPassphrase(context.database.db, parsed.data.passphrase);
+      } catch (error) {
+        if (error instanceof PassphraseError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        throw error;
+      }
+      const created = createOwnerSession(context.database.db);
+      writeSessionCookie(res, created.token);
+      res.json(sessionPayload(context, { id: created.token, csrfHash: '', expiresAt: created.expiresAt }, created.csrfToken));
+    } catch (error) {
+      if (!sendKnownError(res, error)) next(error);
+    }
+  });
+
+  app.get('/api/market-data/watchlist-quotes', async (req, res, next) => {
+    try {
+      const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
+      const requested = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      if (requested.length > WATCHLIST_QUOTE_LIMIT) {
+        res.status(400).json({ error: `Ask for at most ${WATCHLIST_QUOTE_LIMIT} symbols at a time.` });
+        return;
+      }
+      const symbols: string[] = [];
+      for (const item of requested) {
+        const checked = validateTickerSymbol(item);
+        if (!checked.ok) {
+          res.status(400).json({ error: 'One of the symbols was not a stock ticker.' });
+          return;
+        }
+        if (!symbols.includes(checked.ticker)) symbols.push(checked.ticker);
+      }
+      const now = new Date();
+      const key = symbols.join(',');
+      const cached = readCachedWatchlistQuotes(key, now.getTime());
+      if (cached === 'limited') {
+        res.status(429).json({ error: 'Quote refresh is limited. Try again in a few seconds.' });
+        return;
+      }
+      if (cached) {
+        res.json(watchlistQuotesResponseSchema.parse(cached));
+        return;
+      }
+      const useLive =
+        !context.config.publicSimulatedDemo &&
+        context.brokerage != null &&
+        context.brokerConnection.providerAllowed &&
+        !context.brokerConnection.hardDisabled;
+      let quotes;
+      if (useLive) {
+        requireSession(req, context);
+        try {
+          quotes = await readOnlyEquityQuotes(context.brokerage!, symbols, now);
+        } catch {
+          quotes = symbols.map((symbol) => ({
+            symbol,
+            last: null,
+            asOf: null,
+            source: 'unavailable' as const,
+            label: 'Quote unavailable.',
+            ordersEnabled: false as const,
+          }));
+        }
+      } else {
+        quotes = symbols.map((symbol) => simulatedWatchlistQuote(symbol, now));
+      }
+      const payload = watchlistQuotesResponseSchema.parse({
+        quotes,
+        refreshedAt: now.toISOString(),
+        rateLimited: false,
+      });
+      rememberWatchlistQuotes(key, now.getTime(), payload);
+      res.json(payload);
     } catch (error) {
       if (!sendKnownError(res, error)) next(error);
     }

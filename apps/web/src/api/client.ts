@@ -17,6 +17,7 @@ import {
   type HoldingsMappableRole,
   portfolioSchema,
   sessionViewSchema,
+  watchlistQuotesResponseSchema,
   settingsSchema,
   settingsUpdateSchema,
   strategyConfirmSchema,
@@ -32,6 +33,7 @@ import {
   type Portfolio,
   type ScanMorePriority,
   type SessionView,
+  type WatchlistQuotesResponse,
   type SettingsUpdate,
   type SettingsView,
   type SmartScanPolicy,
@@ -111,6 +113,28 @@ export function fetchSettings(): Promise<SettingsView> {
 
 export async function fetchSession(): Promise<SessionView> {
   return rememberSession(await requestJson('/api/session', sessionViewSchema));
+}
+
+export async function setupOwner(passphrase: string, confirm: string): Promise<SessionView> {
+  const response = await fetch('/api/owner/setup', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passphrase, confirm }),
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+  const parsed = sessionViewSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('The local API returned an unexpected payload.');
+  }
+  return rememberSession(parsed.data);
+}
+
+export function fetchWatchlistQuotes(symbols: readonly string[]): Promise<WatchlistQuotesResponse> {
+  const query = symbols.map((symbol) => encodeURIComponent(symbol)).join(',');
+  return requestJson(`/api/market-data/watchlist-quotes?symbols=${query}`, watchlistQuotesResponseSchema);
 }
 
 export async function login(passphrase: string): Promise<SessionView> {

@@ -19,12 +19,12 @@ export interface BrandPalette {
 
 export type ColorwayId = 'default' | 'emerald' | 'midnight' | 'ocean' | 'sunset';
 
-export const COLORWAY_CHOICES: ReadonlyArray<{ id: ColorwayId; label: string }> = [
-  { id: 'default', label: 'Default' },
-  { id: 'emerald', label: 'Emerald Growth' },
-  { id: 'midnight', label: 'Midnight Gold' },
-  { id: 'ocean', label: 'Ocean Blue' },
-  { id: 'sunset', label: 'Sunset Copper' },
+export const COLORWAY_CHOICES: ReadonlyArray<{ id: ColorwayId; label: string; short: string }> = [
+  { id: 'default', label: 'Default', short: 'Default' },
+  { id: 'emerald', label: 'Emerald Growth', short: 'Emerald' },
+  { id: 'midnight', label: 'Midnight Gold', short: 'Gold' },
+  { id: 'ocean', label: 'Ocean Blue', short: 'Ocean' },
+  { id: 'sunset', label: 'Sunset Copper', short: 'Copper' },
 ];
 
 const darkBase = {
@@ -127,7 +127,7 @@ export const colorways: Record<ColorwayId, Record<'light' | 'dark', BrandPalette
       text: '#2A2416',
       muted: '#5C5344',
       emerald: '#8A5A12',
-      cyan: '#9A6B1F',
+      cyan: '#6B4710',
       positive: '#047857',
       warning: '#92400E',
       negative: '#B42318',
