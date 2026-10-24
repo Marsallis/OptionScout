@@ -100,7 +100,7 @@ docker exec -it optionscout-fresh node apps/api/dist/owner-setup.js
 
 You can skip the passphrase and still read Overview. Create one when you want saved rules, bookmarks, or a search. `PUBLIC_SIMULATED_DEMO=true` is the explicit opt-in that allows a simulated `DEMO` search from a non-loopback host without that passphrase. It does not load broker credentials, and it refuses order routes and broker changes. Leave it unset for a normal local install.
 
-The app is published only on your computer, at [http://127.0.0.1:3180](http://127.0.0.1:3180). Port 3180 is the default. To use another local port for a second copy:
+The app is published only on your computer, at [http://127.0.0.1:3180](http://127.0.0.1:3180). A brokerage login stays on that computer. The public website, when it is built from `docker/Dockerfile.hosted`, compiles the simulated-demo lock into the server. Setting `PUBLIC_SIMULATED_DEMO`, `TASTYTRADE_ENABLE_LIVE`, or a query parameter cannot turn that lock off. Port 3180 is the default. To use another local port for a second copy:
 
 ```powershell
 $env:OPTIONSCOUT_PORT = "3197"

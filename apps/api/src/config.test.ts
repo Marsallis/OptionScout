@@ -108,6 +108,43 @@ describe('application configuration', () => {
     expect(config.tastytrade).toBeNull();
     expect(config.secretFileComplete).toBe(false);
     expect(config.ordersEnabled).toBe(false);
+    expect(config.hostedPublicDemo).toBe(false);
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('keeps the hosted website on the simulated book when env and a secret file try to go live', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'optionscout-hosted-lock-'));
+    const secretFilePath = path.join(directory, 'tastytrade.env');
+    const secret = 'hosted-lock-secret-value';
+    fs.writeFileSync(
+      secretFilePath,
+      `TASTYTRADE_CLIENT_ID=id\nTASTYTRADE_CLIENT_SECRET=${secret}\nTASTYTRADE_REFRESH_TOKEN=${secret}\nTASTYTRADE_ENVIRONMENT=production\n`,
+    );
+    const config = parseConfig(
+      baseEnv({
+        PUBLIC_SIMULATED_DEMO: 'false',
+        TASTYTRADE_ENABLE_LIVE: 'true',
+        TASTYTRADE_DISABLE_LIVE: 'false',
+        FINDER_LIVE_SCAN: 'true',
+        SMART_SCAN_LIVE: 'true',
+        DXLINK_LIVE_DIAGNOSTIC: 'true',
+        TASTYTRADE_ACCEPTANCE_FIXTURE: 'true',
+        TASTYTRADE_REFRESH_TOKEN: secret,
+        TASTYTRADE_CLIENT_SECRET: secret,
+      }),
+      { secretFilePath, hostedPublicDemo: true },
+    );
+    expect(config.hostedPublicDemo).toBe(true);
+    expect(config.publicSimulatedDemo).toBe(true);
+    expect(config.liveEnabled).toBe(false);
+    expect(config.hardDisabled).toBe(true);
+    expect(config.finderLiveScan).toBe(false);
+    expect(config.smartScanLive).toBe(false);
+    expect(config.dxlinkLiveDiagnostic).toBe(false);
+    expect(config.acceptanceFixture).toBe(false);
+    expect(config.tastytrade).toBeNull();
+    expect(config.ordersEnabled).toBe(false);
+    expect(JSON.stringify(config)).not.toContain(secret);
     fs.rmSync(directory, { recursive: true, force: true });
   });
 });

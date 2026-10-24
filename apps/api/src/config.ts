@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { hostedPublicDemo as compiledHostedPublicDemo } from './hosted-lock.js';
 
 export class ConfigError extends Error {
   readonly code = 'UNSAFE_OR_UNSUPPORTED_CONFIG';
@@ -44,6 +45,8 @@ export interface AppConfig {
   tastytrade: TastytradeCredentials | null;
   /** Opt-in. Simulated book only. Research from a non-loopback host. No broker credentials. */
   publicSimulatedDemo: boolean;
+  /** Compiled into the public website. Ignores env and query attempts to turn the demo off. */
+  hostedPublicDemo: boolean;
 }
 
 const CREDENTIAL_KEYS = [
@@ -273,9 +276,12 @@ const configSchema = z
 
 export function parseConfig(
   env: NodeJS.ProcessEnv,
-  options?: { defaultDatabasePath?: string; secretFilePath?: string },
+  options?: { defaultDatabasePath?: string; secretFilePath?: string; hostedPublicDemo?: boolean },
 ): AppConfig {
-  rejectCredentialEnv(env);
+  const hostedPublicDemo = compiledHostedPublicDemo || options?.hostedPublicDemo === true;
+  if (!hostedPublicDemo) {
+    rejectCredentialEnv(env);
+  }
   const secretFilePath = options?.secretFilePath ?? (env.TASTYTRADE_SECRET_FILE?.trim() || defaultSecretFilePath());
   const parsed = configSchema.safeParse({
     NODE_ENV: env.NODE_ENV,
@@ -304,7 +310,7 @@ export function parseConfig(
     throw new ConfigError(message);
   }
 
-  const publicSimulatedDemo = parsed.data.PUBLIC_SIMULATED_DEMO === 'true';
+  const publicSimulatedDemo = hostedPublicDemo || parsed.data.PUBLIC_SIMULATED_DEMO === 'true';
   const secretValues = publicSimulatedDemo ? null : readSecretFile(secretFilePath);
   const complete = secretComplete(secretValues);
   const liveEnabled = !publicSimulatedDemo && parsed.data.TASTYTRADE_ENABLE_LIVE === 'true';
@@ -346,5 +352,6 @@ export function parseConfig(
     secretFileComplete: complete,
     tastytrade: publicSimulatedDemo ? null : credentials,
     publicSimulatedDemo,
+    hostedPublicDemo,
   };
 }

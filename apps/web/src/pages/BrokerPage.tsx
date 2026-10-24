@@ -70,6 +70,19 @@ export function BrokerPage() {
     }
   }
 
+  if (session?.publicSimulatedDemo) {
+    return (
+      <Stack spacing={2.5}>
+        <Typography variant="h4" component="h1">
+          Broker & Data
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720 }}>
+          This public site stays on the simulated book. It does not take a passphrase, a grant, or a broker login.
+        </Typography>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2.5}>
       <Typography variant="h4" component="h1">

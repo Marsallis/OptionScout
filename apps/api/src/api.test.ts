@@ -190,6 +190,64 @@ describe('demo API', () => {
     expect(JSON.stringify(response.body)).not.toContain('correct horse');
   });
 
+  it('locks the hosted website to the simulated demo even when env and query ask for a live broker', async () => {
+    resetWatchlistQuoteCache();
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'optionscout-hosted-'));
+    directories.push(directory);
+    const secret = 'hosted-route-secret-value';
+    const config = parseConfig(
+      {
+        NODE_ENV: 'test',
+        PORT: '3180',
+        BIND_HOST: '127.0.0.1',
+        DATABASE_PATH: path.join(directory, 'optionscout.sqlite'),
+        DATA_MODE: 'demo',
+        AUTH_MODE: 'local-owner',
+        ENABLE_ORDER_EXECUTION: 'false',
+        TELEMETRY_ENABLED: 'false',
+        RUNNING_IN_DOCKER: 'false',
+        STATIC_DIR: '',
+        PUBLIC_SIMULATED_DEMO: 'false',
+        TASTYTRADE_ENABLE_LIVE: 'true',
+        FINDER_LIVE_SCAN: 'true',
+      },
+      { hostedPublicDemo: true },
+    );
+    const context = await openAppContext(config);
+    contexts.push(context);
+    const app = createApp(context);
+    const health = await request(app).get('/api/health?live=true&publicSimulatedDemo=false&TASTYTRADE_ENABLE_LIVE=true');
+    expect(health.status).toBe(200);
+    expect(health.body).toMatchObject({
+      ordersEnabled: false,
+      liveEnabled: false,
+      publicSimulatedDemo: true,
+      hostedPublicDemo: true,
+      demo: true,
+    });
+    const orders = await request(app).post('/api/orders').send({ symbol: 'AAPL' });
+    expect(orders.status).toBe(404);
+    const login = await request(app).post('/api/session').send({ passphrase: secret });
+    expect(login.status).toBe(404);
+    expect(JSON.stringify(login.body)).not.toContain(secret);
+    const setup = await request(app).post('/api/owner/setup').send({ passphrase: secret, confirm: secret });
+    expect(setup.status).toBe(404);
+    expect(JSON.stringify(setup.body)).not.toContain(secret);
+    const credentials = await request(app).post('/api/broker/credentials').send({
+      environment: 'production',
+      clientId: 'id',
+      clientSecret: secret,
+      refreshToken: secret,
+    });
+    expect(credentials.status).toBe(404);
+    expect(JSON.stringify(credentials.body)).not.toContain(secret);
+    const quotes = await request(app).get('/api/market-data/watchlist-quotes?symbols=AAPL&live=true');
+    expect(quotes.status).toBe(200);
+    expect(quotes.body.quotes[0]).toMatchObject({ source: 'simulated', ordersEnabled: false });
+    expect(quotes.body.quotes[0].label).toMatch(/Simulated quote/);
+    resetWatchlistQuoteCache();
+  });
+
   it('serves simulated watchlist quotes and limits repeat refreshes', async () => {
     resetWatchlistQuoteCache();
     const context = await boot();
