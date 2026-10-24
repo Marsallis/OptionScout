@@ -275,6 +275,32 @@ describe('Discover Opportunities page', () => {
     expect(screen.queryByRole('checkbox', { name: /AAPL/i })).not.toBeInTheDocument();
   });
 
+  it('shows S&P 500, Nasdaq-100, and VTI lists in the public simulated demo without an import', async () => {
+    const user = userEvent.setup();
+    mocks.appState.session = {
+      authenticated: false,
+      ownerConfigured: false,
+      expiresAt: null,
+      csrfToken: null,
+      publicSimulatedDemo: true,
+    };
+    mocks.fetchDiscoveryUniverses.mockResolvedValue({ curated: [], saved: [], bookmarkDerived: null });
+    renderPage();
+    expect(await screen.findByRole('checkbox', { name: /AAPL/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/503 companies/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Not installed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sign in required/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Nasdaq-100' }));
+    expect((await screen.findAllByText(/101 companies/)).length).toBeGreaterThan(0);
+    await user.type(screen.getByLabelText('Search ticker or company'), 'NVDA');
+    expect(await screen.findByRole('checkbox', { name: /NVDA/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'VTI' }));
+    expect(await screen.findByRole('checkbox', { name: /AAPL/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/3,463 companies/).length).toBeGreaterThan(0);
+  }, SLOW_UI_MS);
+
   it('requires sign-in before searching', async () => {
     mocks.appState.session = null;
     renderPage();

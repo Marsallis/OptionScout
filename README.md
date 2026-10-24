@@ -23,7 +23,7 @@ You can learn the workflow with a built-in simulated book. Connecting a brokerag
 
 **Bring your own ticker list.** Import a CSV of symbols, add a ticker by hand, or start from a small curated example list. Those example lists are application samples. They are not official index membership files.
 
-**Use a large directory when you have the file.** S&P 500, total-market, and Nasdaq-100 collections explain where to download a fund's own holdings file. OptionScout does not download or redistribute those files. An empty category stays empty until you import one.
+**Open a large directory.** Explore Stocks includes research snapshots of the S&P 500, Nasdaq-100, and VTI company lists. Pick one and the companies are already there. Importing a fund holdings file is optional and replaces that snapshot for the matching fund.
 
 **Save an investing strategy.** The built-in example is Sal PMCC — Deep ITM, revision 1. It shows how rules are stored. It is not a recommended investment strategy, and it is not a later private revision of a personal profile. You can copy it and change the numbers. Revisions you save stay in your local database.
 

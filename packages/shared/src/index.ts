@@ -302,6 +302,7 @@ export {
   smartScanRetryCompaniesRequestSchema,
   validateTickerSymbol,
 } from './smart-scan.js';
+export { INDEX_DIRECTORY_LIST, INDEX_DIRECTORY_UNIVERSES } from './index-directories.js';
 export {
   STOCK_COLLECTION_CATALOG,
   collectionDisplayName,

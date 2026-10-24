@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  INDEX_DIRECTORY_UNIVERSES,
   STOCK_COLLECTION_CATALOG,
   collectionDisplayName,
   collectionIsReady,
@@ -29,6 +30,26 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
 type CompanyOption = { ticker: string; name: string };
+
+const BUNDLED_CATALOG: Record<string, DiscoveryUniverse> = {
+  'sp500-exposure': INDEX_DIRECTORY_UNIVERSES.sp500,
+  'total-us-market': INDEX_DIRECTORY_UNIVERSES.vti,
+  'nasdaq-100-exposure': INDEX_DIRECTORY_UNIVERSES.nasdaq100,
+};
+
+function bundledCatalogUniverse(id: string): DiscoveryUniverse | null {
+  return BUNDLED_CATALOG[id] ?? null;
+}
+
+function collectionForCatalog(
+  entry: (typeof STOCK_COLLECTION_CATALOG)[number],
+  saved: readonly DiscoveryUniverse[],
+): DiscoveryUniverse | null {
+  const imported = entry.funds
+    .map((fund) => installedHoldingsForFund(saved, fund.ticker))
+    .find((row) => collectionIsReady(row));
+  return imported ?? bundledCatalogUniverse(entry.id);
+}
 
 export function DiscoverSetupPanels({
   summary,
@@ -329,13 +350,12 @@ export function DiscoverSetupPanels({
             gap: 1.25,
           }}
         >
-          {STOCK_COLLECTION_CATALOG.filter((entry) =>
-            entry.funds.some((fund) => collectionIsReady(installedHoldingsForFund(universes.saved, fund.ticker))),
-          ).map((entry) => {
+          {STOCK_COLLECTION_CATALOG.filter((entry) => collectionForCatalog(entry, universes.saved) != null).map((entry) => {
             const installed = entry.funds
               .map((fund) => installedHoldingsForFund(universes.saved, fund.ticker))
               .find((row) => collectionIsReady(row));
-            const ready = collectionIsReady(installed);
+            const active = installed ?? bundledCatalogUniverse(entry.id);
+            const ready = collectionIsReady(active);
             return (
               <Stack key={entry.id} spacing={0.75} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.25 }}>
                 <Typography variant="subtitle2">{entry.title}</Typography>
@@ -349,15 +369,17 @@ export function DiscoverSetupPanels({
                           ? ` · holdings as of ${installed.currentVersion.holdingsEffectiveDate}`
                           : ''
                       }. Saved on this computer. You do not import this file again before the next search.`
-                    : 'Not ready. The company list has not been saved yet.'}
+                    : ready && active
+                      ? `Included · ${active.tickers.length.toLocaleString('en-US')} companies. Import a holdings file only if you want to replace this list.`
+                      : 'Not ready. The company list has not been saved yet.'}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {ready && installed ? (
+                  {ready && active ? (
                     <Button
                       size="small"
                       variant="contained"
                       onClick={() => {
-                        onSelectUniverse(installed.id);
+                        onSelectUniverse(active.id);
                         document.getElementById('new-research-setup')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
                       }}
                     >
@@ -378,13 +400,11 @@ export function DiscoverSetupPanels({
         </Box>
 
         <Button size="small" sx={{ mt: 1.5 }} onClick={() => setShowUninstalledFunds((value) => !value)}>
-          {showUninstalledFunds ? 'Hide fund lists that are not installed' : 'Fund lists not installed yet'}
+          {showUninstalledFunds ? 'Hide other collections' : 'Other collections you can import'}
         </Button>
         <Collapse in={showUninstalledFunds}>
           <Stack spacing={1} sx={{ mt: 1 }}>
-            {STOCK_COLLECTION_CATALOG.filter(
-              (entry) => !entry.funds.some((fund) => collectionIsReady(installedHoldingsForFund(universes.saved, fund.ticker))),
-            ).map((entry) => (
+            {STOCK_COLLECTION_CATALOG.filter((entry) => collectionForCatalog(entry, universes.saved) == null).map((entry) => (
               <Stack key={entry.id} spacing={0.5}>
                 <Typography variant="subtitle2">{entry.title}</Typography>
                 <Typography variant="body2" color="text.secondary">
