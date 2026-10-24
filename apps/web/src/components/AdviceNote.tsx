@@ -17,7 +17,7 @@ export function AdviceNote() {
     >
       <Typography variant="body2" color="text.secondary">
         <Box component="strong" sx={{ color: 'text.primary', fontWeight: 700 }}>
-          Not financial advice.
+          Educational. Not financial advice.
         </Box>{' '}
         OptionScout is educational research software. It does not place orders and it does not tell you what to buy.
       </Typography>

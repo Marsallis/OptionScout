@@ -16,12 +16,21 @@ export function GlossaryTip({ term, children }: { term: FinderGlossaryKey; child
       }
     >
       <Typography
-        component="span"
+        component="button"
+        type="button"
         variant="inherit"
+        aria-label={`What does ${entry.title} mean?`}
         sx={{
+          border: 0,
+          p: 0,
+          m: 0,
+          font: 'inherit',
+          color: 'inherit',
+          background: 'none',
           borderBottom: '1px dotted',
           borderColor: 'text.secondary',
           cursor: 'help',
+          verticalAlign: 'baseline',
         }}
       >
         {children ?? entry.title}

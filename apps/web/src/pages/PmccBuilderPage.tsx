@@ -17,6 +17,8 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { createSavedIdea, fetchDemoChain, fetchSavedIdeas, fetchStrategyProfiles, type SavedIdea } from '../api/client';
 import { DemoChip } from '../components/DemoChip';
+import { GlossaryTip } from '../components/GlossaryTip';
+import { PayoffSketch } from '../components/PayoffSketch';
 import { formatUsd } from '../lib/format';
 import { useAppState } from '../state/AppState';
 
@@ -153,7 +155,7 @@ export function PmccBuilderPage() {
         <div>
           <Typography variant="h4" component="h1">PMCC Builder</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
-            Pair a long LEAPS call with a shorter call on the fictional DEMO chain. Spot {spot}. Nothing on this page places an order.
+            Pair a long <GlossaryTip term="leaps">LEAPS</GlossaryTip> call with a shorter call on the fictional DEMO chain. Spot {spot}. A <GlossaryTip term="pmcc">PMCC</GlossaryTip> can still be <GlossaryTip term="assignment">assigned</GlossaryTip> on the short call. Nothing on this page places an order.
           </Typography>
         </div>
         <DemoChip />
@@ -196,7 +198,13 @@ export function PmccBuilderPage() {
               ['Days to expiration', `${analysis.figures.longDays ?? '—'} long · ${analysis.figures.shortDays ?? '—'} short`],
             ]}
           />
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Max loss on this plan is {money(analysis.figures.maxLoss)}, the net debit. Breakeven is about {money(analysis.figures.breakeven)} if you hold the long call to expiration. Those figures are a model of the simulated chain, not a promise of profit.
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>{analysis.figures.structureNote}</Typography>
+          <Stack sx={{ mt: 2 }}>
+            <PayoffSketch />
+          </Stack>
           <Button sx={{ mt: 2 }} variant="contained" disabled={busy || !analysis.figures.structureOk} onClick={() => void savePlan()}>
             Save planned PMCC
           </Button>

@@ -12,6 +12,14 @@ export const FINDER_GLOSSARY = {
     title: 'Call option',
     text: 'A contract that gives you the right, but not the obligation, to buy 100 shares (usual U.S. equity multiplier) of the underlying stock at a fixed strike price before expiration. Buying a call does not mean you already own the shares.',
   },
+  put: {
+    title: 'Put option',
+    text: 'A contract that gives you the right, but not the obligation, to sell shares at the strike price before expiration. A put can gain value when the stock falls. OptionScout’s research desk is built around long calls, not a recommendation to buy puts.',
+  },
+  expiration: {
+    title: 'Expiration',
+    text: 'The last day the contract is valid. After expiration, a call that finished out of the money is worth nothing. A call that finished in the money is settled by the rules of that option. Time left is usually shown as days to expiration.',
+  },
   strike: {
     title: 'Strike price',
     text: 'The fixed price per share at which you may buy the stock if you exercise the call. For a call, intrinsic value appears when the stock trades above the strike.',

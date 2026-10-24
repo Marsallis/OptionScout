@@ -15,21 +15,27 @@ import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import CableIcon from '@mui/icons-material/Cable';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
 import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useColorMode } from '../brand/ColorMode';
+import { useExperienceMode } from '../brand/ExperienceMode';
 import { Wordmark } from '../brand/Wordmark';
 import { brand } from '../brand/tokens';
 import { AdviceNote } from '../components/AdviceNote';
 import { DemoBanner } from '../components/DemoBanner';
+import { GlossaryDialog } from '../components/GlossaryDialog';
+import { ThemePicker } from '../components/ThemePicker';
 import { NAV_ITEMS } from '../content/pages';
 import { BrokerPage } from '../pages/BrokerPage';
 import { PositionDetailPage, PositionsPage } from '../pages/BrokeragePages';
@@ -75,6 +81,28 @@ function ThemeToggle() {
   );
 }
 
+function ExperienceToggle() {
+  const { mode, setMode } = useExperienceMode();
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={mode}
+      aria-label="Experience"
+      onChange={(_event, next: string | null) => {
+        if (next === 'beginner' || next === 'pro') setMode(next);
+      }}
+    >
+      <ToggleButton value="beginner" aria-label="Beginner view" sx={{ minHeight: 44 }}>
+        Beginner
+      </ToggleButton>
+      <ToggleButton value="pro" aria-label="Pro view" sx={{ minHeight: 44 }}>
+        Pro
+      </ToggleButton>
+    </ToggleButtonGroup>
+  );
+}
+
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const items = new Map(NAV_ITEMS.map((item) => [item.to, item]));
   return (
@@ -87,7 +115,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <Typography variant="caption" color="text.secondary">
           Local research desk · orders off
         </Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <ExperienceToggle />
+          <GlossaryDialog />
+        </Stack>
       </Box>
+      <ThemePicker />
       <List sx={{ px: 1.25, flex: 1, overflow: 'auto' }}>
         {NAV_GROUPS.map((group) => (
           <Box key={group.label} sx={{ mb: 1.25 }}>
@@ -116,6 +149,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     color: 'text.secondary',
                     transition: `background-color ${brand.motion.fast} ${brand.motion.ease}, border-color ${brand.motion.fast} ${brand.motion.ease}, color ${brand.motion.fast} ${brand.motion.ease}`,
                     '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
+                    minHeight: 48,
                     '&.active': {
                       backgroundColor: 'action.selected',
                       borderLeftColor: 'primary.main',
@@ -173,6 +207,22 @@ export function AppShell() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Box
+        component="a"
+        href="#main"
+        sx={{
+          position: 'absolute',
+          left: 8,
+          top: -40,
+          zIndex: 2000,
+          bgcolor: 'background.paper',
+          px: 1.5,
+          py: 1,
+          '&:focus': { top: 8 },
+        }}
+      >
+        Skip to content
+      </Box>
       {drawer}
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {desktop ? null : (
@@ -196,9 +246,14 @@ export function AppShell() {
             <ThemeToggle />
           </Toolbar>
         )}
+        {desktop ? null : (
+          <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <ExperienceToggle />
+          </Box>
+        )}
         <DemoBanner />
         <AdviceNote />
-        <Box key={pathname} className="os-page" component="main" sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, minWidth: 0 }}>
+        <Box id="main" key={pathname} className="os-page" component="main" sx={{ p: { xs: 2, sm: 2.5, md: 4 }, flex: 1, minWidth: 0 }}>
           <Routes>
             <Route path="/" element={<OverviewPage />} />
             <Route path="/leaps" element={<LeapsFinderPage />} />

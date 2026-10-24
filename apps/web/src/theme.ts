@@ -1,10 +1,10 @@
 import { createTheme, type PaletteMode } from '@mui/material/styles';
-import { brand, palettes } from './brand/tokens';
+import { brand, colorways, type ColorwayId } from './brand/tokens';
 
 const { font, motion, radius } = brand;
 
-export function createAppTheme(mode: PaletteMode) {
-  const color = palettes[mode];
+export function createAppTheme(mode: PaletteMode, colorway: ColorwayId = 'default') {
+  const color = colorways[colorway][mode];
   const dark = mode === 'dark';
 
   return createTheme({
@@ -30,16 +30,16 @@ export function createAppTheme(mode: PaletteMode) {
     },
     typography: {
       fontFamily: font.body,
-      fontSize: 15,
-      h1: { fontFamily: font.heading, fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.04em' },
-      h2: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.75rem', letterSpacing: '-0.03em' },
-      h3: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.03em' },
-      h4: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.85rem', letterSpacing: '-0.03em', lineHeight: 1.15 },
-      h5: { fontFamily: font.heading, fontWeight: 650, fontSize: '1.35rem', letterSpacing: '-0.02em' },
-      h6: { fontFamily: font.heading, fontWeight: 650, fontSize: '1.05rem' },
+      fontSize: 16,
+      h1: { fontFamily: font.heading, fontWeight: 700, fontSize: '2.125rem', letterSpacing: '-0.03em', lineHeight: 1.2 },
+      h2: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.75rem', letterSpacing: '-0.03em', lineHeight: 1.25 },
+      h3: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em', lineHeight: 1.3 },
+      h4: { fontFamily: font.heading, fontWeight: 700, fontSize: '1.75rem', letterSpacing: '-0.03em', lineHeight: 1.25 },
+      h5: { fontFamily: font.heading, fontWeight: 650, fontSize: '1.25rem', letterSpacing: '-0.02em', lineHeight: 1.35 },
+      h6: { fontFamily: font.heading, fontWeight: 650, fontSize: '1.05rem', lineHeight: 1.4 },
       subtitle1: { fontFamily: font.heading, fontWeight: 650, fontSize: '1rem' },
-      body1: { fontSize: '0.95rem', lineHeight: 1.55 },
-      body2: { fontSize: '0.875rem', lineHeight: 1.5 },
+      body1: { fontSize: '1rem', lineHeight: 1.65 },
+      body2: { fontSize: '0.95rem', lineHeight: 1.6 },
       button: { textTransform: 'none', fontWeight: 700, fontFamily: font.body, fontSize: '0.92rem' },
       caption: { fontSize: '0.8rem' },
       overline: { letterSpacing: '0.08em', fontWeight: 700 },
@@ -86,11 +86,22 @@ export function createAppTheme(mode: PaletteMode) {
             transition: `background-color ${motion.fast} ${motion.ease}, border-color ${motion.fast} ${motion.ease}`,
           },
           '.os-stock-row[data-selected="true"]': {
-            backgroundColor: dark ? 'rgba(45, 212, 191, 0.12)' : 'rgba(15, 118, 110, 0.08)',
+            backgroundColor: `${color.emerald}1F`,
             borderLeftColor: color.emerald,
           },
           '.os-result-card': {
             transition: `transform ${motion.medium} ${motion.ease}, border-color ${motion.medium} ${motion.ease}, box-shadow ${motion.medium} ${motion.ease}`,
+          },
+          '.os-card': {
+            animation: `os-page-enter ${motion.page} ${motion.ease} both`,
+          },
+          '@keyframes os-draw': {
+            from: { strokeDashoffset: 800 },
+            to: { strokeDashoffset: 0 },
+          },
+          '.os-line-draw': {
+            strokeDasharray: 800,
+            animation: `os-draw 900ms ${motion.ease} both`,
           },
           '.os-result-card:hover': {
             transform: 'translateY(-2px)',
@@ -101,8 +112,13 @@ export function createAppTheme(mode: PaletteMode) {
             borderColor: color.cyan,
             boxShadow: `inset 0 0 0 1px ${color.cyan}`,
           },
+          'a:focus-visible, button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select:focus-visible': {
+            outline: `3px solid ${color.focus}`,
+            outlineOffset: 3,
+          },
           '@media (prefers-reduced-motion: reduce)': {
-            '.os-page, .os-mark--live .os-scan': { animation: 'none !important' },
+            '.os-page, .os-card, .os-mark--live .os-scan, .os-line-draw': { animation: 'none !important' },
+            '.os-line-draw': { strokeDashoffset: 0 },
             '.os-stock-row, .os-result-card, .MuiButton-root': { transition: 'none !important' },
             '.os-result-card:hover, .MuiButton-root:hover, .MuiButton-root:active': { transform: 'none !important' },
           },
@@ -122,6 +138,8 @@ export function createAppTheme(mode: PaletteMode) {
         styleOverrides: {
           root: {
             borderRadius: radius.control,
+            minHeight: 44,
+            paddingInline: 16,
             transition: `transform ${motion.press} ${motion.ease}, box-shadow ${motion.medium} ${motion.ease}, background-color ${motion.fast} ${motion.ease}, border-color ${motion.fast} ${motion.ease}`,
             '&:focus-visible': {
               outline: `3px solid ${color.focus}`,
@@ -169,6 +187,8 @@ export function createAppTheme(mode: PaletteMode) {
       MuiIconButton: {
         styleOverrides: {
           root: {
+            width: 44,
+            height: 44,
             '&:focus-visible': {
               outline: `3px solid ${color.focus}`,
               outlineOffset: 2,
@@ -183,8 +203,8 @@ export function createAppTheme(mode: PaletteMode) {
             fontWeight: 650,
             borderColor: color.border,
             '&.Mui-selected': {
-              backgroundColor: dark ? 'rgba(45, 212, 191, 0.16)' : 'rgba(15, 118, 110, 0.12)',
-              color: dark ? '#D7FFF8' : '#0F766E',
+              backgroundColor: `${color.emerald}29`,
+              color: color.text,
               borderColor: color.emerald,
             },
           },
@@ -193,7 +213,7 @@ export function createAppTheme(mode: PaletteMode) {
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            backgroundColor: dark ? '#0E1726' : '#FFFFFF',
+            backgroundColor: dark ? color.background : color.surface,
             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: color.cyan },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: color.emerald },
           },

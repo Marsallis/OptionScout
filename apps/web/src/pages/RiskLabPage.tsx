@@ -10,6 +10,8 @@ import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import { fetchDemoChain, fetchSavedIdeas, type SavedIdea } from '../api/client';
 import { DemoChip } from '../components/DemoChip';
+import { GlossaryTip } from '../components/GlossaryTip';
+import { PayoffSketch } from '../components/PayoffSketch';
 import { formatSignedUsd } from '../lib/format';
 import { useAppState } from '../state/AppState';
 
@@ -49,7 +51,7 @@ function Chart({ points, color }: { points: Array<{ spot: number; pnl: number }>
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Profit and loss chart" style={{ width: '100%', height: 'auto' }}>
       <line x1="12" y1={zero} x2={width - 12} y2={zero} stroke="currentColor" strokeOpacity="0.35" />
-      <polyline fill="none" stroke={color} strokeWidth="2.5" points={line} />
+      <polyline className="os-line-draw" fill="none" stroke={color} strokeWidth="2.5" points={line} />
     </svg>
   );
 }
@@ -147,6 +149,7 @@ export function RiskLabPage() {
         </div>
         <DemoChip />
       </Stack>
+      <PayoffSketch />
       {notice ? <Alert severity="warning">{notice}</Alert> : null}
       {choice == null ? <Alert severity="info">Open a simulated position or save a planned PMCC to run a scenario.</Alert> : (
         <>
@@ -176,9 +179,9 @@ export function RiskLabPage() {
             <Typography variant="h6">Greeks summary</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Net of long minus short, from the stored simulated marks. A blank greek was not in the source.</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1.5 }}>
-              <Metric name="Delta" value={greeks?.delta} />
+              <Metric name="Delta" tip="delta" value={greeks?.delta} />
               <Metric name="Gamma" value={greeks?.gamma} />
-              <Metric name="Theta" value={greeks?.theta} />
+              <Metric name="Theta" tip="theta" value={greeks?.theta} />
               <Metric name="Vega" value={greeks?.vega} />
             </Stack>
           </Paper>
@@ -188,10 +191,10 @@ export function RiskLabPage() {
   );
 }
 
-function Metric({ name, value }: { name: string; value: number | null | undefined }) {
+function Metric({ name, value, tip }: { name: string; value: number | null | undefined; tip?: 'delta' | 'theta' | 'iv' }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-      <Typography variant="caption" color="text.secondary">{name}</Typography>
+      <Typography variant="caption" color="text.secondary">{tip ? <GlossaryTip term={tip}>{name}</GlossaryTip> : name}</Typography>
       <Typography variant="body1">{value == null || Number.isNaN(value) ? 'Not in the simulated book' : value.toFixed(3)}</Typography>
     </Paper>
   );

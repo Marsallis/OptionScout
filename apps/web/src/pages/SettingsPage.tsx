@@ -10,6 +10,8 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { useColorMode } from '../brand/ColorMode';
+import { useExperienceMode } from '../brand/ExperienceMode';
+import { ThemePicker } from '../components/ThemePicker';
 import { DemoChip } from '../components/DemoChip';
 import { SectionNotice } from '../components/SectionNotice';
 import { useAppState } from '../state/AppState';
@@ -17,6 +19,7 @@ import { useAppState } from '../state/AppState';
 export function SettingsPage() {
   const { settingsStatus, settingsError, settings, session, savePreferences, retrySettings } = useAppState();
   const { mode, setMode } = useColorMode();
+  const experience = useExperienceMode();
   const [message, setMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated);
 
@@ -51,6 +54,21 @@ export function SettingsPage() {
           </Button>
           <Button variant={mode === 'dark' ? 'contained' : 'outlined'} onClick={() => setMode('dark')}>
             Dark
+          </Button>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Colorways sit on top of light and dark. The choice stays in this browser.
+        </Typography>
+        <ThemePicker compact />
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Beginner adds a welcome guide and a plain-language payoff picture. Pro keeps the same pages with less teaching text.
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+          <Button variant={experience.mode === 'beginner' ? 'contained' : 'outlined'} onClick={() => experience.setMode('beginner')} aria-pressed={experience.mode === 'beginner'}>
+            Beginner view
+          </Button>
+          <Button variant={experience.mode === 'pro' ? 'contained' : 'outlined'} onClick={() => experience.setMode('pro')} aria-pressed={experience.mode === 'pro'}>
+            Pro view
           </Button>
         </Stack>
         <Typography variant="h6" sx={{ mt: 3 }}>

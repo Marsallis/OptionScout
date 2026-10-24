@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import type { Dashboard } from '@optionscout/shared';
 import Alert from '@mui/material/Alert';
@@ -7,16 +7,22 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Collapse from '@mui/material/Collapse';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
+import { useExperienceMode } from '../brand/ExperienceMode';
 import { DemoChip } from '../components/DemoChip';
+import { FirstRunGuide } from '../components/FirstRunGuide';
+import { PayoffSketch } from '../components/PayoffSketch';
 import { SectionNotice } from '../components/SectionNotice';
+import { WatchlistCard } from '../components/WatchlistCard';
 import { MetricCard } from '../components/MetricCard';
 import { formatAction, formatDate, formatSignedUsd, formatSnapshot, formatUsd, pnlColor } from '../lib/format';
 import { useAppState } from '../state/AppState';
@@ -26,7 +32,22 @@ const SHORT_CALL_ACTIONS = new Set(['sell_to_open', 'buy_to_close', 'sell_to_clo
 
 export function OverviewPage() {
   const { dashboardStatus, dashboardError, dashboard, settings, settingsError, retryDashboard, retrySettings } = useAppState();
+  const { mode: experience } = useExperienceMode();
   const [showLedger, setShowLedger] = useState(false);
+  const [positionQuery, setPositionQuery] = useState('');
+  const [positionSort, setPositionSort] = useState<'book' | 'az' | 'za'>('book');
+  const visiblePositions = useMemo(() => {
+    const rows = dashboard?.positions ?? [];
+    const needle = positionQuery.trim().toLowerCase();
+    const filtered = rows.filter((position) => {
+      if (!needle) return true;
+      return `${position.underlying} ${position.structure}`.toLowerCase().includes(needle);
+    });
+    if (positionSort === 'book') return filtered;
+    return [...filtered].sort((left, right) =>
+      positionSort === 'za' ? right.underlying.localeCompare(left.underlying) : left.underlying.localeCompare(right.underlying),
+    );
+  }, [dashboard?.positions, positionQuery, positionSort]);
 
   if (dashboardStatus === 'loading') {
     return (
@@ -59,11 +80,27 @@ export function OverviewPage() {
             Overview
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Demo investing snapshot {formatSnapshot(dashboard.asOf)}
+            Last updated {formatSnapshot(dashboard.asOf)}
           </Typography>
         </Box>
         <DemoChip />
       </Stack>
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }} component="section" aria-label="Connection status">
+        <Typography variant="overline" color="text.secondary">
+          Connection
+        </Typography>
+        <Typography variant="body1" sx={{ mt: 0.5 }}>
+          {dashboard.brokerage.label}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Orders are off. Last updated {formatSnapshot(dashboard.asOf)}.
+        </Typography>
+      </Paper>
+
+      {experience === 'beginner' ? <FirstRunGuide /> : null}
+      {experience === 'beginner' ? <PayoffSketch /> : null}
+      <WatchlistCard />
 
       {settingsError ? <SectionNotice title="Settings did not load." message={settingsError} onRetry={retrySettings} /> : null}
       <Paper data-testid="home-intro" sx={{ p: { xs: 2, md: 3 }, backgroundImage: 'none' }}>
@@ -212,7 +249,13 @@ export function OverviewPage() {
           <Paper sx={{ overflow: 'auto' }}>
             <Stack direction="row" sx={{ px: 2, py: 1.5, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="h6">Active positions</Typography>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField size="small" label="Filter positions" value={positionQuery} onChange={(event) => setPositionQuery(event.target.value)} />
+                <TextField select size="small" label="Sort positions" value={positionSort} onChange={(event) => setPositionSort(event.target.value as typeof positionSort)} sx={{ minWidth: 140 }}>
+                  <MenuItem value="book">As saved</MenuItem>
+                  <MenuItem value="az">A to Z</MenuItem>
+                  <MenuItem value="za">Z to A</MenuItem>
+                </TextField>
                 <Button size="small" onClick={() => setShowLedger((value) => !value)}>
                   {showLedger ? 'Hide how this was calculated' : 'How this was calculated'}
                 </Button>
@@ -232,7 +275,7 @@ export function OverviewPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dashboard.positions.map((position) => (
+                {visiblePositions.map((position) => (
                   <TableRow key={position.id} hover>
                     <TableCell sx={{ fontWeight: 700 }}>{position.underlying}</TableCell>
                     <TableCell>
